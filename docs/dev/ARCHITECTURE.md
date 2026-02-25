@@ -24,6 +24,11 @@ This repository starts as a modular monolith split into workspace apps/packages.
 - MinIO for object storage
 - Keycloak (+ dedicated Postgres) for identity and access
 
+## Data Model Notes (MVP)
+
+- Multi-tenant isolation is enforced at the data layer with `customer_id` on all tenant-scoped entities (`Project`, `Ticket`, `TicketComment`, `TicketAttachment`, and tenant-scoped `AuditLog` rows).
+- `Ticket.status` and `Ticket.type` are stored as `TEXT` intentionally to keep workflow/category expansion backward-compatible without immediate schema migrations; strict validation happens in application code.
+
 ## TODO
 
 - Define bounded contexts and ownership boundaries per module
