@@ -1,0 +1,16 @@
+{
+  "name": "tiba-portal",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.0.0",
+  "scripts": {
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "build": "pnpm -r build",
+    "dev": "concurrently -n api,web -c cyan,magenta \"pnpm --filter @tiba/api start:dev\" \"pnpm --filter @tiba/web dev\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "typescript": "^5.7.3"
+  }
+}

@@ -1,0 +1,6 @@
+* @tiba/platform
+
+/apps/api/ @tiba/backend
+/apps/web/ @tiba/frontend
+/packages/shared/ @tiba/platform
+/docs/ @tiba/platform
