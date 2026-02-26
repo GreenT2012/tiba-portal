@@ -8,6 +8,8 @@ import { RolesGuard } from './auth/guards/roles.guard';
 import { TenantGuard } from './auth/guards/tenant.guard';
 import { HealthController } from './health.controller';
 import { MeController } from './me.controller';
+import { PrismaModule } from './prisma/prisma.module';
+import { TicketsModule } from './tickets/tickets.module';
 
 @Module({
   imports: [
@@ -15,7 +17,9 @@ import { MeController } from './me.controller';
       isGlobal: true,
       envFilePath: ['.env', '.env.local']
     }),
-    PassportModule.register({ defaultStrategy: 'jwt' })
+    PassportModule.register({ defaultStrategy: 'jwt' }),
+    PrismaModule,
+    TicketsModule
   ],
   controllers: [HealthController, MeController],
   providers: [

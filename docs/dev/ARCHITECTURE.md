@@ -49,6 +49,13 @@ This repository starts as a modular monolith split into workspace apps/packages.
   - `tiba_agent` and `tiba_admin` are allowed without token tenant for cross-tenant operations
 - For internal users, `x-customer-id` request header can optionally provide tenant scope in MVP.
 
+## Ticket Views (MVP)
+
+- `new` view maps to `status=OPEN` and `assignee_user_id IS NULL`.
+- `open` view maps to `status IN (OPEN, IN_PROGRESS)`.
+- `my` view maps to `assignee_user_id=<current user>` and `status!=CLOSED`.
+- Tenant scoping is always enforced for `customer_user` by token `customer_id`; internal roles can query cross-tenant and optionally filter by `customerId`.
+
 ## Data Model Notes (MVP)
 
 - Multi-tenant isolation is enforced at the data layer with `customer_id` on all tenant-scoped entities (`Project`, `Ticket`, `TicketComment`, `TicketAttachment`, and tenant-scoped `AuditLog` rows).

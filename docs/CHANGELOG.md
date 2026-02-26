@@ -6,3 +6,4 @@
 - Add initial Prisma domain schema and baseline migration for customers, projects, tickets, comments, attachments, and audit logs.
 - Add API auth/authorization foundation with Keycloak JWT validation, public/roles/tenant guards, and `/api/v1/me`.
 - Load API environment variables from `apps/api/.env` via Nest `ConfigModule` so Keycloak issuer config is available at runtime.
+- Add Tickets API MVP (`/tickets` list/create/detail/status/assign/comments) with tenant-scoped access rules, validation, and audit logging.

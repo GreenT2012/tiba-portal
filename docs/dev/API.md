@@ -8,6 +8,12 @@
 
 - `GET /health` (public) -> `{ "ok": true }`
 - `GET /me` (authenticated) -> `{ "sub": string, "roles": string[], "customerId": string | null, "email": string | null }`
+- `GET /tickets` (authenticated, tenant-aware list)
+- `POST /tickets` (authenticated, tenant-aware create)
+- `GET /tickets/:id` (authenticated, tenant-aware detail with comments + attachments metadata)
+- `PATCH /tickets/:id/status` (authenticated, tenant-aware status change)
+- `PATCH /tickets/:id/assign` (authenticated, internal roles only: `tiba_agent`/`tiba_admin`)
+- `POST /tickets/:id/comments` (authenticated, tenant-aware comment create)
 
 ## Authentication
 
@@ -26,6 +32,56 @@
   - `realm_access.roles` (preferred)
   - `resource_access[client].roles` (fallback)
 - Internal users (`tiba_agent`, `tiba_admin`) may pass optional `x-customer-id` header to scope tenant actions in MVP.
+
+## Tickets API (MVP)
+
+### `GET /tickets`
+
+Query params:
+- `status` (optional): `OPEN` | `IN_PROGRESS` | `CLOSED`
+- `projectId` (optional)
+- `assignee` (optional): `me` | `unassigned`
+- `view` (optional): `new` | `open` | `my`
+- `sort` (optional): `updatedAt` | `createdAt` (default `updatedAt`)
+- `order` (optional): `asc` | `desc` (default `desc`)
+- `page` (optional, default `1`)
+- `pageSize` (optional, default `20`, max `100`)
+- `customerId` (optional, only for `tiba_agent`/`tiba_admin`; forbidden for `customer_user`)
+
+View mappings:
+- `new`: `status=OPEN` and `assignee_user_id IS NULL`
+- `open`: `status IN (OPEN, IN_PROGRESS)`
+- `my`: `assignee_user_id=<current_user_sub>` and `status!=CLOSED`
+
+Response:
+- `{ items, page, pageSize, total }`
+
+### `POST /tickets`
+
+- `customer_user`:
+  - scoped to token `customer_id`
+  - cannot pass `customerId`
+  - cannot set `assigneeUserId` (request rejected)
+- `tiba_agent` / `tiba_admin`:
+  - must pass `customerId`
+  - may set `assigneeUserId`
+- Writes `AuditLog` action `created`.
+
+### `PATCH /tickets/:id/status`
+
+- Body: `{ "status": "OPEN" | "IN_PROGRESS" | "CLOSED" }`
+- Writes `AuditLog` action `status_changed`.
+
+### `PATCH /tickets/:id/assign`
+
+- Body: `{ "assigneeUserId": "..." | null }`
+- Allowed only for `tiba_agent` / `tiba_admin`.
+- Writes `AuditLog` action `assigned`.
+
+### `POST /tickets/:id/comments`
+
+- Body: `{ "body": string }`
+- Writes `AuditLog` action `comment_added`.
 
 ## TODO
 
