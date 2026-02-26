@@ -24,6 +24,31 @@ This repository starts as a modular monolith split into workspace apps/packages.
 - MinIO for object storage
 - Keycloak (+ dedicated Postgres) for identity and access
 
+## Auth and Access Control (MVP)
+
+- API authentication uses Keycloak OIDC access tokens with NestJS Passport JWT strategy.
+- Token verification uses:
+  - `iss` validation against `KEYCLOAK_ISSUER`
+  - signature verification via Keycloak JWKS endpoint (`<issuer>/protocol/openid-connect/certs`)
+- Optional `KEYCLOAK_AUDIENCE` can enforce audience membership when configured.
+
+### Role Mapping
+
+- Roles are extracted from `realm_access.roles` first.
+- If realm roles are not present, `resource_access[*].roles` are used as fallback.
+- Current role set used in guards:
+  - `customer_user`
+  - `tiba_agent`
+  - `tiba_admin`
+
+### Tenant Context
+
+- `customer_id` token claim is mapped into request user context as `customerId`.
+- `TenantGuard` enforces tenant presence for routes marked with `@RequireTenant()`:
+  - `customer_user` requires non-null `customerId` (otherwise 403)
+  - `tiba_agent` and `tiba_admin` are allowed without token tenant for cross-tenant operations
+- For internal users, `x-customer-id` request header can optionally provide tenant scope in MVP.
+
 ## Data Model Notes (MVP)
 
 - Multi-tenant isolation is enforced at the data layer with `customer_id` on all tenant-scoped entities (`Project`, `Ticket`, `TicketComment`, `TicketAttachment`, and tenant-scoped `AuditLog` rows).

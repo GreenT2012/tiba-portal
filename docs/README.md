@@ -6,6 +6,7 @@
 - [Architecture](./dev/ARCHITECTURE.md)
 - [API](./dev/API.md)
 - [ADR 0001 - Initial Architecture](./dev/ADR/0001-initial-architecture.md)
+- [ADR 0002 - Auth and Tenant Context](./dev/ADR/0002-auth-and-tenant-context.md)
 
 ## User Guides
 

@@ -11,6 +11,7 @@
 1. Copy environment files:
    - `cp .env.example .env`
    - `cp apps/api/.env.example apps/api/.env`
+   - Set `apps/api/.env` values for `KEYCLOAK_ISSUER` and `DATABASE_URL` for your local setup.
 2. Start infrastructure:
    - `docker compose up -d`
 3. Install workspace dependencies:
