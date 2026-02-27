@@ -14,13 +14,26 @@
 - `PATCH /tickets/:id/status` -> returns `TicketDto` in camelCase
 - `PATCH /tickets/:id/assign` -> returns `TicketDto` in camelCase
 - `POST /tickets/:id/comments` -> returns `TicketCommentDto` in camelCase
+- `POST /tickets/:id/attachments/presign-upload` -> returns upload URL payload (camelCase)
+- `GET /tickets/:id/attachments/:attachmentId/presign-download` -> returns `{ downloadUrl }`
 
 Tickets audit actions written to `AuditLog`:
 - `POST /tickets` -> `created` with `{ type, status, projectId }`
 - `PATCH /tickets/:id/status` -> `status_changed` with `{ from, to }`
 - `PATCH /tickets/:id/assign` -> `assigned` with `{ from, to }`
 - `POST /tickets/:id/comments` -> `comment_added` with `{ commentId }`
+- `POST /tickets/:id/attachments/presign-upload` -> `attachment_added` with `{ filename, mime, sizeBytes, attachmentId }`
 - Audit records include actor attribution fields: `actor_user_id` and derived `actor_role` (`tiba_admin` > `tiba_agent` > `customer_user`).
+
+Attachment upload rules:
+- Allowed mime types: `application/pdf` and `image/*`
+- Max file size from `MAX_ATTACHMENT_BYTES` (default 10MB)
+
+Presign upload response example:
+- `{ "attachmentId": "...", "objectKey": "...", "uploadUrl": "...", "requiredHeaders": { "Content-Type": "application/pdf" } }`
+
+Presign download response example:
+- `{ "downloadUrl": "..." }`
 
 ## Authentication
 
@@ -47,6 +60,13 @@ Tickets audit actions written to `AuditLog`:
 
 Example ticket summary response item:
 - `{ "id": "...", "title": "...", "status": "OPEN", "type": "Bug", "projectId": "...", "customerId": "...", "assigneeUserId": null, "createdAt": "...", "updatedAt": "..." }`
+
+Postman flow (attachments):
+1. Create a ticket (`POST /tickets`).
+2. Request presigned upload (`POST /tickets/:id/attachments/presign-upload`) with `filename`, `mime`, `sizeBytes`.
+3. Upload file via HTTP PUT to `uploadUrl` with header `Content-Type` from `requiredHeaders`.
+4. Fetch ticket detail (`GET /tickets/:id`) and verify attachment metadata appears in `attachments`.
+5. Request download URL (`GET /tickets/:id/attachments/:attachmentId/presign-download`) and open the returned URL.
 
 ## TODO
 

@@ -44,3 +44,16 @@ export type TicketListResponseDto = {
   pageSize: number;
   total: number;
 };
+
+export type PresignUploadAttachmentResponseDto = {
+  attachmentId: string;
+  objectKey: string;
+  uploadUrl: string;
+  requiredHeaders: {
+    'Content-Type': string;
+  };
+};
+
+export type PresignDownloadAttachmentResponseDto = {
+  downloadUrl: string;
+};

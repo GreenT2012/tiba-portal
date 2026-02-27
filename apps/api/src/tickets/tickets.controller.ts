@@ -5,9 +5,16 @@ import { AssignTicketDto } from './dto/assign-ticket.dto';
 import { CreateTicketCommentDto } from './dto/create-ticket-comment.dto';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { ListTicketsDto } from './dto/list-tickets.dto';
+import { PresignUploadAttachmentDto } from './dto/presign-upload-attachment.dto';
 import { UpdateTicketStatusDto } from './dto/update-ticket-status.dto';
 import { TicketsService } from './tickets.service';
-import { TicketCommentDto, TicketDto, TicketListResponseDto } from './tickets.types';
+import {
+  PresignDownloadAttachmentResponseDto,
+  PresignUploadAttachmentResponseDto,
+  TicketCommentDto,
+  TicketDto,
+  TicketListResponseDto
+} from './tickets.types';
 
 @Controller('tickets')
 export class TicketsController {
@@ -50,5 +57,23 @@ export class TicketsController {
     @Body() dto: CreateTicketCommentDto
   ): Promise<TicketCommentDto> {
     return this.ticketsService.addComment(req.user, id, dto);
+  }
+
+  @Post(':id/attachments/presign-upload')
+  presignAttachmentUpload(
+    @Req() req: { user: AuthUser },
+    @Param('id') id: string,
+    @Body() dto: PresignUploadAttachmentDto
+  ): Promise<PresignUploadAttachmentResponseDto> {
+    return this.ticketsService.presignAttachmentUpload(req.user, id, dto);
+  }
+
+  @Get(':id/attachments/:attachmentId/presign-download')
+  presignAttachmentDownload(
+    @Req() req: { user: AuthUser },
+    @Param('id') id: string,
+    @Param('attachmentId') attachmentId: string
+  ): Promise<PresignDownloadAttachmentResponseDto> {
+    return this.ticketsService.presignAttachmentDownload(req.user, id, attachmentId);
   }
 }

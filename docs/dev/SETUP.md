@@ -12,6 +12,7 @@
    - `cp .env.example .env`
    - `cp apps/api/.env.example apps/api/.env`
    - Set `apps/api/.env` values for `KEYCLOAK_ISSUER` and `DATABASE_URL` for your local setup.
+   - Ensure `MINIO_BUCKET` exists in MinIO (default: `tiba-portal`), either via MinIO Console (`http://localhost:9001`) or by creating it once with `mc mb`.
 2. Start infrastructure:
    - `docker compose up -d`
 3. Install workspace dependencies:
