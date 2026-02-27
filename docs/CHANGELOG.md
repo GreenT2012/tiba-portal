@@ -8,3 +8,4 @@
 - Load API environment variables from `apps/api/.env` via Nest `ConfigModule` so Keycloak issuer config is available at runtime.
 - Add ticket audit logging (`created`, `status_changed`, `assigned`, `comment_added`) persisted via `AuditLog` in ticket write transactions.
 - Add `AuditLog.actor_role` to persist primary actor role (`tiba_admin` > `tiba_agent` > `customer_user`) alongside `actor_user_id`.
+- Add MinIO-backed ticket attachment presign upload/download endpoints with MIME/size validation and `attachment_added` audit events.

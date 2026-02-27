@@ -63,6 +63,7 @@ This repository starts as a modular monolith split into workspace apps/packages.
   - `status_changed`
   - `assigned`
   - `comment_added`
+  - `attachment_added`
 - `AuditLog.customer_id` represents the tenant (customer) scope for the event.
 - `AuditLog.actor_user_id` identifies the acting user and `AuditLog.actor_role` stores the actor's primary role (`tiba_admin` > `tiba_agent` > `customer_user`).
 
