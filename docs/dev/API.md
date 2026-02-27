@@ -15,6 +15,13 @@
 - `PATCH /tickets/:id/assign` -> returns `TicketDto` in camelCase
 - `POST /tickets/:id/comments` -> returns `TicketCommentDto` in camelCase
 
+Tickets audit actions written to `AuditLog`:
+- `POST /tickets` -> `created` with `{ type, status, projectId }`
+- `PATCH /tickets/:id/status` -> `status_changed` with `{ from, to }`
+- `PATCH /tickets/:id/assign` -> `assigned` with `{ from, to }`
+- `POST /tickets/:id/comments` -> `comment_added` with `{ commentId }`
+- Audit records include actor attribution fields: `actor_user_id` and derived `actor_role` (`tiba_admin` > `tiba_agent` > `customer_user`).
+
 ## Authentication
 
 - Bearer token required for protected routes: `Authorization: Bearer <access_token>`
