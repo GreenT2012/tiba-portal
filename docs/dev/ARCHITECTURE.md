@@ -49,6 +49,12 @@ This repository starts as a modular monolith split into workspace apps/packages.
   - `tiba_agent` and `tiba_admin` are allowed without token tenant for cross-tenant operations
 - For internal users, `x-customer-id` request header can optionally provide tenant scope in MVP.
 
+## API Casing
+
+- Postgres/Prisma models use snake_case column/field names.
+- External API responses use camelCase consistently.
+- Translation is explicit in module mappers (for tickets: `tickets.mapper.ts`) to prevent leaking raw Prisma shapes.
+
 ## Data Model Notes (MVP)
 
 - Multi-tenant isolation is enforced at the data layer with `customer_id` on all tenant-scoped entities (`Project`, `Ticket`, `TicketComment`, `TicketAttachment`, and tenant-scoped `AuditLog` rows).

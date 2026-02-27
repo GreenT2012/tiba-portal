@@ -8,6 +8,12 @@
 
 - `GET /health` (public) -> `{ "ok": true }`
 - `GET /me` (authenticated) -> `{ "sub": string, "roles": string[], "customerId": string | null, "email": string | null }`
+- `GET /tickets` -> `{ items, page, pageSize, total }` with camelCase ticket summary keys
+- `POST /tickets` -> returns `TicketDto` in camelCase
+- `GET /tickets/:id` -> returns `TicketDto` in camelCase
+- `PATCH /tickets/:id/status` -> returns `TicketDto` in camelCase
+- `PATCH /tickets/:id/assign` -> returns `TicketDto` in camelCase
+- `POST /tickets/:id/comments` -> returns `TicketCommentDto` in camelCase
 
 ## Authentication
 
@@ -26,6 +32,14 @@
   - `realm_access.roles` (preferred)
   - `resource_access[client].roles` (fallback)
 - Internal users (`tiba_agent`, `tiba_admin`) may pass optional `x-customer-id` header to scope tenant actions in MVP.
+
+## Response Casing
+
+- All external API payloads use camelCase keys.
+- Database and Prisma fields remain snake_case; response mapping is done explicitly in the tickets module mapper.
+
+Example ticket summary response item:
+- `{ "id": "...", "title": "...", "status": "OPEN", "type": "Bug", "projectId": "...", "customerId": "...", "assigneeUserId": null, "createdAt": "...", "updatedAt": "..." }`
 
 ## TODO
 
