@@ -91,6 +91,7 @@ model AuditLog {
   entity_id     String
   action        String
   actor_user_id String?
+  actor_role    String?
   meta_json     Json
   created_at    DateTime  @default(now())
   customer      Customer? @relation(fields: [customer_id], references: [id], onDelete: SetNull)

@@ -55,6 +55,17 @@ This repository starts as a modular monolith split into workspace apps/packages.
 - External API responses use camelCase consistently.
 - Translation is explicit in module mappers (for tickets: `tickets.mapper.ts`) to prevent leaking raw Prisma shapes.
 
+## Audit Events (Tickets)
+
+- Ticket writes also persist `AuditLog` records in the same transaction for consistency.
+- Current actions:
+  - `created`
+  - `status_changed`
+  - `assigned`
+  - `comment_added`
+- `AuditLog.customer_id` represents the tenant (customer) scope for the event.
+- `AuditLog.actor_user_id` identifies the acting user and `AuditLog.actor_role` stores the actor's primary role (`tiba_admin` > `tiba_agent` > `customer_user`).
+
 ## Data Model Notes (MVP)
 
 - Multi-tenant isolation is enforced at the data layer with `customer_id` on all tenant-scoped entities (`Project`, `Ticket`, `TicketComment`, `TicketAttachment`, and tenant-scoped `AuditLog` rows).

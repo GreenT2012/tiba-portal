@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException
 } from '@nestjs/common';
+import { AuditService } from '../audit/audit.service';
 import { AuthUser } from '../auth/auth-user.interface';
 import { PrismaService } from '../prisma/prisma.service';
 import { toTicketCommentDto, toTicketDto, toTicketSummaryDto } from './tickets.mapper';
@@ -18,7 +19,10 @@ const STATUSES = ['OPEN', 'IN_PROGRESS', 'CLOSED'] as const;
 
 @Injectable()
 export class TicketsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditService: AuditService
+  ) {}
 
   async listTickets(user: AuthUser, query: ListTicketsDto): Promise<TicketListResponseDto> {
     if (this.isCustomerUser(user) && query.customerId) {
@@ -88,21 +92,38 @@ export class TicketsService {
       throw new BadRequestException('Project not found for customer');
     }
 
-    const ticket = await this.prisma.ticket.create({
-      data: {
-        customer_id: customerId,
-        project_id: dto.projectId,
-        type: dto.type,
-        status,
-        title: dto.title,
-        description: dto.description,
-        assignee_user_id: dto.assigneeUserId ?? null,
-        created_by_user_id: user.sub
-      },
-      include: {
-        comments: true,
-        attachments: true
-      }
+    const ticket = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.ticket.create({
+        data: {
+          customer_id: customerId,
+          project_id: dto.projectId,
+          type: dto.type,
+          status,
+          title: dto.title,
+          description: dto.description,
+          assignee_user_id: dto.assigneeUserId ?? null,
+          created_by_user_id: user.sub
+        },
+        include: {
+          comments: true,
+          attachments: true
+        }
+      });
+
+      await this.auditService.write(
+        {
+          customerId: created.customer_id,
+          entityType: 'ticket',
+          entityId: created.id,
+          action: 'created',
+          actorUserId: user.sub,
+          actorRoles: user.roles,
+          metaJson: { type: created.type, status: created.status, projectId: created.project_id }
+        },
+        tx as Pick<PrismaService, 'auditLog'>
+      );
+
+      return created;
     });
 
     return toTicketDto(ticket as any);
@@ -129,10 +150,27 @@ export class TicketsService {
     const existing = await this.prisma.ticket.findUnique({ where: { id } });
     this.assertTicketVisible(user, existing);
 
-    const updated = await this.prisma.ticket.update({
-      where: { id },
-      data: { status: dto.status },
-      include: { comments: true, attachments: true }
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const next = await tx.ticket.update({
+        where: { id },
+        data: { status: dto.status },
+        include: { comments: true, attachments: true }
+      });
+
+      await this.auditService.write(
+        {
+          customerId: next.customer_id,
+          entityType: 'ticket',
+          entityId: next.id,
+          action: 'status_changed',
+          actorUserId: user.sub,
+          actorRoles: user.roles,
+          metaJson: { from: existing.status, to: next.status }
+        },
+        tx as Pick<PrismaService, 'auditLog'>
+      );
+
+      return next;
     });
 
     return toTicketDto(updated as any);
@@ -146,10 +184,27 @@ export class TicketsService {
     const existing = await this.prisma.ticket.findUnique({ where: { id } });
     this.assertTicketVisible(user, existing);
 
-    const updated = await this.prisma.ticket.update({
-      where: { id },
-      data: { assignee_user_id: dto.assigneeUserId ?? null },
-      include: { comments: true, attachments: true }
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const next = await tx.ticket.update({
+        where: { id },
+        data: { assignee_user_id: dto.assigneeUserId ?? null },
+        include: { comments: true, attachments: true }
+      });
+
+      await this.auditService.write(
+        {
+          customerId: next.customer_id,
+          entityType: 'ticket',
+          entityId: next.id,
+          action: 'assigned',
+          actorUserId: user.sub,
+          actorRoles: user.roles,
+          metaJson: { from: existing.assignee_user_id ?? null, to: next.assignee_user_id ?? null }
+        },
+        tx as Pick<PrismaService, 'auditLog'>
+      );
+
+      return next;
     });
 
     return toTicketDto(updated as any);
@@ -177,6 +232,19 @@ export class TicketsService {
         where: { id: ticket.id },
         data: { updated_at: new Date() }
       });
+
+      await this.auditService.write(
+        {
+          customerId: ticket.customer_id,
+          entityType: 'ticket',
+          entityId: ticket.id,
+          action: 'comment_added',
+          actorUserId: user.sub,
+          actorRoles: user.roles,
+          metaJson: { commentId: created.id }
+        },
+        tx as Pick<PrismaService, 'auditLog'>
+      );
 
       return created;
     });
@@ -208,10 +276,10 @@ export class TicketsService {
     throw new ForbiddenException('Unsupported role');
   }
 
-  private assertTicketVisible(
+  private assertTicketVisible<T extends { id: string; customer_id: string }>(
     user: AuthUser,
-    ticket: { id: string; customer_id: string } | null
-  ): asserts ticket is { id: string; customer_id: string } {
+    ticket: T | null
+  ): asserts ticket is T {
     if (!ticket) {
       throw new NotFoundException('Ticket not found');
     }
