@@ -11,8 +11,15 @@
 1. Copy environment files:
    - `cp .env.example .env`
    - `cp apps/api/.env.example apps/api/.env`
+   - `cp apps/web/.env.example apps/web/.env.local`
    - Set `apps/api/.env` values for `KEYCLOAK_ISSUER` and `DATABASE_URL` for your local setup.
    - Ensure `MINIO_BUCKET` exists in MinIO (default: `tiba-portal`), either via MinIO Console (`http://localhost:9001`) or by creating it once with `mc mb`.
+   - Set `apps/web/.env.local` values for `NEXTAUTH_SECRET`, `KEYCLOAK_CLIENT_SECRET`, and confirm `BACKEND_BASE_URL`.
+   - Keycloak setup for web login:
+     - Create client `web` in realm `tiba`.
+     - Set client type to OpenID Connect, confidential.
+     - Add redirect URI: `http://localhost:3000/api/auth/callback/keycloak`.
+     - Add post-logout redirect URI: `http://localhost:3000`.
 2. Start infrastructure:
    - `docker compose up -d`
 3. Install workspace dependencies:
