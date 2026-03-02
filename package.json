@@ -4,7 +4,7 @@
   "private": true,
   "packageManager": "pnpm@10.0.0",
   "scripts": {
-    "lint": "pnpm -r lint",
+    "lint": "pnpm --filter @tiba/web check:next-routes && pnpm -r lint",
     "test": "pnpm -r test",
     "build": "pnpm -r build",
     "dev": "concurrently -n api,web -c cyan,magenta \"pnpm --filter @tiba/api start:dev\" \"pnpm --filter @tiba/web dev\""

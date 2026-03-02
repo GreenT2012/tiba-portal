@@ -1,5 +1,5 @@
-import { AuthButtons } from '@/components/auth-buttons';
 import { auth } from '@/auth';
+import Link from 'next/link';
 
 export default async function DashboardPage() {
   const session = await auth();
@@ -8,7 +8,9 @@ export default async function DashboardPage() {
     <main>
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Dashboard</h1>
-        <AuthButtons />
+        <Link className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm" href="/api/auth/logout">
+          Logout (SSO)
+        </Link>
       </div>
 
       <p className="mt-2 text-slate-600">Authenticated user context:</p>

@@ -2,15 +2,7 @@
 
 ## Purpose
 
-This guide will document customer-facing portal flows.
-
-## Planned Flows
-
-- Sign in with organization account
-- View project and ticket status
-- Create and comment on tickets
-- Upload and review attachments
-
+This guide documents customer-facing portal flows.
 
 ## Login Flow (MVP)
 
@@ -19,10 +11,7 @@ This guide will document customer-facing portal flows.
 3. After successful login, navigate to `/dashboard` or `/tickets`.
 4. Browser calls only web BFF routes (`/api/backend/*`); API tokens stay server-side in the session flow.
 
-## TODO
-=======
 ## Create Ticket With Attachments (MVP)
-1. Login and open `/tickets`.
 
 1. Login and open `/tickets`.
 2. Click `New Ticket`.
@@ -39,3 +28,9 @@ This guide will document customer-facing portal flows.
    - request presigned upload URLs via `/api/backend/tickets/:id/attachments/presign-upload`
    - upload files with HTTP `PUT` to the returned URLs
 8. You are redirected back to `/tickets`; uploaded attachments are linked to the created ticket.
+
+## Logout Options
+
+- `Logout (SSO)` from the dashboard clears the app session and calls Keycloak end-session (with `id_token_hint`).
+- After `Logout (SSO)`, the next login should show the Keycloak credential screen (no automatic SSO re-entry).
+- App-only logout (if used elsewhere) clears only the local app session and may keep the Keycloak SSO session active.
