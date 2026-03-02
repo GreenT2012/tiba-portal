@@ -1,22 +1,23 @@
-import js from '@eslint/js';
-import tseslint from 'typescript-eslint';
+import js from "@eslint/js";
+import tseslint from "typescript-eslint";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-export default tseslint.config(
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+export default [
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    files: ['**/*.ts'],
+    files: ["**/*.ts"],
     languageOptions: {
       parserOptions: {
-        project: './tsconfig.json',
-        tsconfigRootDir: import.meta.dirname
-      }
+        tsconfigRootDir: __dirname,
+        project: ["./tsconfig.json"],
+        ecmaVersion: "latest",
+        sourceType: "module",
+      },
     },
-    rules: {
-      '@typescript-eslint/no-explicit-any': 'off'
-    }
   },
-  {
-    ignores: ['dist/**', 'node_modules/**']
-  }
-);
+];

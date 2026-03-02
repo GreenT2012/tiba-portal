@@ -11,7 +11,7 @@ This guide will document customer-facing portal flows.
 - Create and comment on tickets
 - Upload and review attachments
 
-<<<<<<< ours
+
 ## Login Flow (MVP)
 
 1. Open `http://localhost:3000` and click `Login`.
@@ -22,7 +22,7 @@ This guide will document customer-facing portal flows.
 ## TODO
 =======
 ## Create Ticket With Attachments (MVP)
->>>>>>> theirs
+1. Login and open `/tickets`.
 
 1. Login and open `/tickets`.
 2. Click `New Ticket`.
