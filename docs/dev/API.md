@@ -48,6 +48,17 @@ Projects list query params:
 Projects response item example:
 - `{ "id": "...", "customerId": "...", "name": "...", "createdAt": "...", "updatedAt": "..." }`
 
+Create ticket (`POST /tickets`) behavior:
+- Request body: `{ projectId, type, title, description, status?, assigneeUserId?, customerId? }`
+- `customer_user`:
+  - `customerId` in body is rejected
+  - `assigneeUserId` in body is rejected
+  - tenant is enforced by token `customerId`; selected `projectId` must belong to same customer
+- `tiba_agent` / `tiba_admin`:
+  - `customerId` is not required when `projectId` is provided
+  - tenant/customer is always derived from selected `projectId`
+  - optional `assigneeUserId` is allowed at creation
+
 Users query params:
 - `q` (optional, search by username/email)
 - `role` (optional, realm role filter such as `tiba_agent`)

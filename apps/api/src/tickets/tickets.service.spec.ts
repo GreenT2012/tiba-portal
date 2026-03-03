@@ -91,7 +91,60 @@ describe('TicketsService audit logging', () => {
           customer_id: 'c1',
           actor_user_id: 'u1',
           actor_role: 'customer_user',
-          meta_json: { type: 'Bug', status: 'OPEN', projectId: 'p1' }
+          meta_json: { type: 'Bug', status: 'OPEN', projectId: 'p1', assigneeUserId: null }
+        })
+      })
+    );
+  });
+
+  it('allows tiba_agent create with assignee and derives customer from project', async () => {
+    const { prisma, tx } = makePrismaMock();
+    const storage = makeStorageMock();
+    prisma.project.findFirst.mockResolvedValue({ id: 'p2', customer_id: 'c2' });
+    tx.ticket.create.mockResolvedValue({
+      id: 't2',
+      customer_id: 'c2',
+      project_id: 'p2',
+      type: 'Feature',
+      status: 'OPEN',
+      title: 'Internal ticket',
+      description: 'Desc',
+      assignee_user_id: 'agent-2',
+      created_by_user_id: 'a1',
+      created_at: new Date(),
+      updated_at: new Date(),
+      comments: [],
+      attachments: []
+    });
+
+    const service = new TicketsService(prisma as any, new AuditService(prisma as any), storage as any);
+
+    const result = await service.createTicket(
+      { sub: 'a1', roles: ['tiba_agent'], customerId: null, email: null },
+      {
+        projectId: 'p2',
+        title: 'Internal ticket',
+        description: 'Desc',
+        type: 'Feature',
+        assigneeUserId: 'agent-2'
+      }
+    );
+
+    expect(tx.ticket.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          customer_id: 'c2',
+          project_id: 'p2',
+          assignee_user_id: 'agent-2'
+        })
+      })
+    );
+    expect(result.customerId).toBe('c2');
+    expect(tx.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          action: 'created',
+          meta_json: expect.objectContaining({ assigneeUserId: 'agent-2' })
         })
       })
     );
