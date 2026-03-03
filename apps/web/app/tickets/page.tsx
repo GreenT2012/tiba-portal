@@ -60,7 +60,7 @@ export default function TicketsPage() {
         <div className="space-y-3">
           {data?.items.length ? (
             data.items.map((ticket) => (
-              <article className="rounded-md border border-slate-200 bg-white p-4" key={ticket.id}>
+              <Link className="block rounded-md border border-slate-200 bg-white p-4" href={`/tickets/${ticket.id}`} key={ticket.id}>
                 <h2 className="font-medium text-slate-900">{ticket.title}</h2>
                 <p className="mt-1 text-sm text-slate-600">
                   {ticket.type} - {ticket.status} - project {ticket.projectId}
@@ -68,7 +68,7 @@ export default function TicketsPage() {
                 <p className="mt-1 text-xs text-slate-500">
                   assignee: {ticket.assigneeUserId ?? 'unassigned'} - updated {new Date(ticket.updatedAt).toLocaleString()}
                 </p>
-              </article>
+              </Link>
             ))
           ) : (
             <p className="text-slate-600">No tickets found.</p>
