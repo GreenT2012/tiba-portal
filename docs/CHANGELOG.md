@@ -12,3 +12,4 @@
 - Add NextAuth Keycloak login in web app and a backend proxy (`/api/backend/*`) so browser traffic stays on web origin and API tokens remain server-side.
 - Add customer ticket creation wizard in web with attachment step and BFF-based ticket list loading via `/api/backend/*`.
 - Add `GET /api/v1/projects` with tenant-scoped customer access, internal cross-tenant filtering, pagination, sorting, and search for project dropdowns.
+- Add `GET /api/v1/users` for TIBA roles, backed by Keycloak Admin API client credentials, to search assignable users.

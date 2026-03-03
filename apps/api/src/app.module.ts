@@ -11,6 +11,7 @@ import { MeController } from './me.controller';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProjectsModule } from './projects/projects.module';
 import { TicketsModule } from './tickets/tickets.module';
+import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
@@ -21,7 +22,8 @@ import { TicketsModule } from './tickets/tickets.module';
     PassportModule.register({ defaultStrategy: 'jwt' }),
     PrismaModule,
     ProjectsModule,
-    TicketsModule
+    TicketsModule,
+    UsersModule
   ],
   controllers: [HealthController, MeController],
   providers: [

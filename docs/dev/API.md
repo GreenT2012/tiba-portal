@@ -8,6 +8,7 @@
 
 - `GET /health` (public) -> `{ "ok": true }`
 - `GET /me` (authenticated) -> `{ "sub": string, "roles": string[], "customerId": string | null, "email": string | null }`
+- `GET /users` (tiba roles only) -> `[{ "id", "username", "email", "firstName", "lastName" }]`
 - `GET /projects` -> `{ items, page, pageSize, total }` with camelCase project keys
 - `GET /tickets` -> `{ items, page, pageSize, total }` with camelCase ticket summary keys
 - `POST /tickets` -> returns `TicketDto` in camelCase
@@ -46,6 +47,25 @@ Projects list query params:
 
 Projects response item example:
 - `{ "id": "...", "customerId": "...", "name": "...", "createdAt": "...", "updatedAt": "..." }`
+
+Users query params:
+- `q` (optional, search by username/email)
+- `role` (optional, realm role filter such as `tiba_agent`)
+- `limit` (default `20`, max `50`)
+
+Users endpoint authorization:
+- Allowed roles: `tiba_agent`, `tiba_admin`
+- `customer_user` is forbidden
+
+Keycloak admin service account configuration for `/users`:
+1. Create a confidential Keycloak client for API admin access.
+2. Enable service accounts on the client.
+3. Grant realm-management permissions required to read users/roles.
+4. Set API env vars:
+   - `KEYCLOAK_ADMIN_CLIENT_ID`
+   - `KEYCLOAK_ADMIN_CLIENT_SECRET`
+   - `KEYCLOAK_ADMIN_REALM` (default `tiba`)
+   - optional `KEYCLOAK_BASE_URL` (otherwise derived from `KEYCLOAK_ISSUER`)
 
 ## Authentication
 
