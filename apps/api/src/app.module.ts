@@ -9,6 +9,7 @@ import { TenantGuard } from './auth/guards/tenant.guard';
 import { HealthController } from './health.controller';
 import { MeController } from './me.controller';
 import { PrismaModule } from './prisma/prisma.module';
+import { ProjectsModule } from './projects/projects.module';
 import { TicketsModule } from './tickets/tickets.module';
 
 @Module({
@@ -19,6 +20,7 @@ import { TicketsModule } from './tickets/tickets.module';
     }),
     PassportModule.register({ defaultStrategy: 'jwt' }),
     PrismaModule,
+    ProjectsModule,
     TicketsModule
   ],
   controllers: [HealthController, MeController],

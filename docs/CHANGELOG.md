@@ -9,8 +9,6 @@
 - Add ticket audit logging (`created`, `status_changed`, `assigned`, `comment_added`) persisted via `AuditLog` in ticket write transactions.
 - Add `AuditLog.actor_role` to persist primary actor role (`tiba_admin` > `tiba_agent` > `customer_user`) alongside `actor_user_id`.
 - Add MinIO-backed ticket attachment presign upload/download endpoints with MIME/size validation and `attachment_added` audit events.
-
 - Add NextAuth Keycloak login in web app and a backend proxy (`/api/backend/*`) so browser traffic stays on web origin and API tokens remain server-side.
-=======
 - Add customer ticket creation wizard in web with attachment step and BFF-based ticket list loading via `/api/backend/*`.
-
+- Add `GET /api/v1/projects` with tenant-scoped customer access, internal cross-tenant filtering, pagination, sorting, and search for project dropdowns.

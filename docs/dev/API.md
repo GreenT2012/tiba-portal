@@ -8,6 +8,7 @@
 
 - `GET /health` (public) -> `{ "ok": true }`
 - `GET /me` (authenticated) -> `{ "sub": string, "roles": string[], "customerId": string | null, "email": string | null }`
+- `GET /projects` -> `{ items, page, pageSize, total }` with camelCase project keys
 - `GET /tickets` -> `{ items, page, pageSize, total }` with camelCase ticket summary keys
 - `POST /tickets` -> returns `TicketDto` in camelCase
 - `GET /tickets/:id` -> returns `TicketDto` in camelCase
@@ -35,6 +36,17 @@ Presign upload response example:
 Presign download response example:
 - `{ "downloadUrl": "..." }`
 
+Projects list query params:
+- `q` (optional, case-insensitive name contains search)
+- `customerId` (optional, honored only for `tiba_agent`/`tiba_admin`; forbidden for `customer_user`)
+- `page` (default `1`)
+- `pageSize` (default `20`, max `100`)
+- `sort` (`name` | `createdAt`, default `name`)
+- `order` (`asc` | `desc`, default `asc`)
+
+Projects response item example:
+- `{ "id": "...", "customerId": "...", "name": "...", "createdAt": "...", "updatedAt": "..." }`
+
 ## Authentication
 
 - Bearer token required for protected routes: `Authorization: Bearer <access_token>`
@@ -52,6 +64,9 @@ Presign download response example:
   - `realm_access.roles` (preferred)
   - `resource_access[client].roles` (fallback)
 - Internal users (`tiba_agent`, `tiba_admin`) may pass optional `x-customer-id` header to scope tenant actions in MVP.
+- `GET /projects` tenant behavior:
+  - `customer_user`: always scoped to token `customerId`
+  - `tiba_agent`/`tiba_admin`: cross-tenant by default, optional `customerId` filter
 
 ## Response Casing
 
@@ -70,5 +85,5 @@ Postman flow (attachments):
 
 ## TODO
 
-- Add ticket/customer/project resource endpoints
+- Add customer resource endpoints
 - Add versioning and error contract documentation
