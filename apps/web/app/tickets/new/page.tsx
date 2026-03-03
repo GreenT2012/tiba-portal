@@ -42,6 +42,7 @@ export default function NewTicketPage() {
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [createdTicketId, setCreatedTicketId] = useState<string | null>(null);
   const [projectQuery, setProjectQuery] = useState('');
   const [debouncedProjectQuery, setDebouncedProjectQuery] = useState('');
   const [projectOptions, setProjectOptions] = useState<ProjectOption[]>([]);
@@ -164,28 +165,35 @@ export default function NewTicketPage() {
     setSubmitting(true);
 
     try {
-      const createRes = await fetch('/api/backend/tickets', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(values)
-      });
+      let ticketId = createdTicketId;
+      if (!ticketId) {
+        const createRes = await fetch('/api/backend/tickets', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(values)
+        });
 
-      if (!createRes.ok) {
-        const message = await createRes.text();
-        throw new Error(message || 'Failed to create ticket');
+        if (!createRes.ok) {
+          const message = await createRes.text();
+          throw new Error(message || 'Failed to create ticket');
+        }
+
+        const ticket = (await createRes.json()) as { id: string };
+        ticketId = ticket.id;
+        setCreatedTicketId(ticketId);
       }
 
-      const ticket = (await createRes.json()) as { id: string };
+      let hasUploadFailure = false;
 
       for (const fileEntry of selectedFiles) {
-        if (fileEntry.state === 'failed') {
+        if (fileEntry.state === 'done') {
           continue;
         }
 
         setFileState(fileEntry.id, 'uploading');
 
         try {
-          const presignRes = await fetch(`/api/backend/tickets/${ticket.id}/attachments/presign-upload`, {
+          const presignRes = await fetch(`/api/backend/tickets/${ticketId}/attachments/presign-upload`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -219,8 +227,13 @@ export default function NewTicketPage() {
 
           setFileState(fileEntry.id, 'done');
         } catch (error) {
+          hasUploadFailure = true;
           setFileState(fileEntry.id, 'failed', error instanceof Error ? error.message : 'Upload failed');
         }
+      }
+
+      if (hasUploadFailure) {
+        throw new Error('Some attachments failed to upload. Please retry.');
       }
 
       router.push('/tickets');
@@ -230,6 +243,7 @@ export default function NewTicketPage() {
       setSubmitting(false);
     }
   };
+  const handleFinalSubmit = handleSubmit(onSubmit);
 
   return (
     <main>
@@ -240,7 +254,12 @@ export default function NewTicketPage() {
         </Link>
       </div>
 
-      <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
+      <form
+        className="space-y-6"
+        onSubmit={(event) => {
+          event.preventDefault();
+        }}
+      >
         <div className="rounded-md border border-slate-200 bg-white p-4">
           <p className="text-sm font-medium text-slate-700">Step {step} of 2</p>
 
@@ -392,7 +411,12 @@ export default function NewTicketPage() {
               Continue
             </button>
           ) : (
-            <button className="rounded-md border border-slate-300 bg-white px-4 py-2" disabled={submitting} type="submit">
+            <button
+              className="rounded-md border border-slate-300 bg-white px-4 py-2"
+              disabled={submitting}
+              onClick={() => void handleFinalSubmit()}
+              type="button"
+            >
               {submitting ? 'Creating...' : 'Create Ticket'}
             </button>
           )}
