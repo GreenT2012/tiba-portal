@@ -16,7 +16,7 @@ This guide documents customer-facing portal flows.
 1. Login and open `/tickets`.
 2. Click `New Ticket`.
 3. Fill the wizard details step:
-   - `projectId`
+   - `Project` (searchable dropdown, scoped to your customer projects)
    - `type`
    - `title`
    - `description`

@@ -8,6 +8,8 @@
 
 - `GET /health` (public) -> `{ "ok": true }`
 - `GET /me` (authenticated) -> `{ "sub": string, "roles": string[], "customerId": string | null, "email": string | null }`
+- `GET /users` (tiba roles only) -> `[{ "id", "username", "email", "firstName", "lastName" }]`
+- `GET /projects` -> `{ items, page, pageSize, total }` with camelCase project keys
 - `GET /tickets` -> `{ items, page, pageSize, total }` with camelCase ticket summary keys
 - `POST /tickets` -> returns `TicketDto` in camelCase
 - `GET /tickets/:id` -> returns `TicketDto` in camelCase
@@ -35,6 +37,47 @@ Presign upload response example:
 Presign download response example:
 - `{ "downloadUrl": "..." }`
 
+Projects list query params:
+- `q` (optional, case-insensitive name contains search)
+- `customerId` (optional, honored only for `tiba_agent`/`tiba_admin`; forbidden for `customer_user`)
+- `page` (default `1`)
+- `pageSize` (default `20`, max `100`)
+- `sort` (`name` | `createdAt`, default `name`)
+- `order` (`asc` | `desc`, default `asc`)
+
+Projects response item example:
+- `{ "id": "...", "customerId": "...", "name": "...", "createdAt": "...", "updatedAt": "..." }`
+
+Create ticket (`POST /tickets`) behavior:
+- Request body: `{ projectId, type, title, description, status?, assigneeUserId?, customerId? }`
+- `customer_user`:
+  - `customerId` in body is rejected
+  - `assigneeUserId` in body is rejected
+  - tenant is enforced by token `customerId`; selected `projectId` must belong to same customer
+- `tiba_agent` / `tiba_admin`:
+  - `customerId` is not required when `projectId` is provided
+  - tenant/customer is always derived from selected `projectId`
+  - optional `assigneeUserId` is allowed at creation
+
+Users query params:
+- `q` (optional, search by username/email)
+- `role` (optional, realm role filter such as `tiba_agent`)
+- `limit` (default `20`, max `50`)
+
+Users endpoint authorization:
+- Allowed roles: `tiba_agent`, `tiba_admin`
+- `customer_user` is forbidden
+
+Keycloak admin service account configuration for `/users`:
+1. Create a confidential Keycloak client for API admin access.
+2. Enable service accounts on the client.
+3. Grant realm-management permissions required to read users/roles.
+4. Set API env vars:
+   - `KEYCLOAK_ADMIN_CLIENT_ID`
+   - `KEYCLOAK_ADMIN_CLIENT_SECRET`
+   - `KEYCLOAK_ADMIN_REALM` (default `tiba`)
+   - optional `KEYCLOAK_BASE_URL` (otherwise derived from `KEYCLOAK_ISSUER`)
+
 ## Authentication
 
 - Bearer token required for protected routes: `Authorization: Bearer <access_token>`
@@ -52,6 +95,9 @@ Presign download response example:
   - `realm_access.roles` (preferred)
   - `resource_access[client].roles` (fallback)
 - Internal users (`tiba_agent`, `tiba_admin`) may pass optional `x-customer-id` header to scope tenant actions in MVP.
+- `GET /projects` tenant behavior:
+  - `customer_user`: always scoped to token `customerId`
+  - `tiba_agent`/`tiba_admin`: cross-tenant by default, optional `customerId` filter
 
 ## Response Casing
 
@@ -70,5 +116,5 @@ Postman flow (attachments):
 
 ## TODO
 
-- Add ticket/customer/project resource endpoints
+- Add customer resource endpoints
 - Add versioning and error contract documentation

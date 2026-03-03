@@ -94,14 +94,34 @@ export class TicketsService {
       throw new BadRequestException('status must be one of: OPEN, IN_PROGRESS, CLOSED');
     }
 
-    const customerId = this.resolveCreateCustomerId(user, dto);
-    const project = await this.prisma.project.findFirst({
-      where: { id: dto.projectId, customer_id: customerId }
-    });
+    const project = await this.prisma.project.findFirst({ where: { id: dto.projectId } });
 
     if (!project) {
-      throw new BadRequestException('Project not found for customer');
+      throw new BadRequestException('Project not found');
     }
+
+    if (this.isCustomerUser(user)) {
+      if (!user.customerId) {
+        throw new ForbiddenException('customer_id claim is required for customer_user');
+      }
+      if (dto.customerId) {
+        throw new BadRequestException('customerId cannot be set by customer_user');
+      }
+      if (dto.assigneeUserId) {
+        throw new BadRequestException('assigneeUserId cannot be set by customer_user');
+      }
+      if (project.customer_id !== user.customerId) {
+        throw new BadRequestException('Project not found for customer');
+      }
+    } else if (this.isInternalUser(user)) {
+      if (dto.customerId && dto.customerId !== project.customer_id) {
+        throw new BadRequestException('customerId does not match project customer');
+      }
+    } else {
+      throw new ForbiddenException('Unsupported role');
+    }
+
+    const customerId = project.customer_id;
 
     const ticket = await this.prisma.$transaction(async (tx) => {
       const created = await tx.ticket.create({
@@ -129,7 +149,12 @@ export class TicketsService {
           action: 'created',
           actorUserId: user.sub,
           actorRoles: user.roles,
-          metaJson: { type: created.type, status: created.status, projectId: created.project_id }
+          metaJson: {
+            type: created.type,
+            status: created.status,
+            projectId: created.project_id,
+            assigneeUserId: created.assignee_user_id
+          }
         },
         tx as Pick<PrismaService, 'auditLog'>
       );
@@ -348,30 +373,6 @@ export class TicketsService {
 
     const downloadUrl = await this.storageService.getPresignedDownloadUrl(attachment.object_key);
     return { downloadUrl };
-  }
-
-  private resolveCreateCustomerId(user: AuthUser, dto: CreateTicketDto): string {
-    if (this.isCustomerUser(user)) {
-      if (!user.customerId) {
-        throw new ForbiddenException('customer_id claim is required for customer_user');
-      }
-      if (dto.customerId) {
-        throw new BadRequestException('customerId cannot be set by customer_user');
-      }
-      if (dto.assigneeUserId) {
-        throw new BadRequestException('assigneeUserId cannot be set by customer_user');
-      }
-      return user.customerId;
-    }
-
-    if (this.isInternalUser(user)) {
-      if (!dto.customerId) {
-        throw new BadRequestException('customerId is required for internal ticket creation');
-      }
-      return dto.customerId;
-    }
-
-    throw new ForbiddenException('Unsupported role');
   }
 
   private assertTicketVisible<T extends { id: string; customer_id: string }>(

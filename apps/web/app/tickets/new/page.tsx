@@ -3,7 +3,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
@@ -25,6 +25,11 @@ type SelectedFile = {
   error?: string;
 };
 
+type ProjectOption = {
+  id: string;
+  name: string;
+};
+
 const MAX_ATTACHMENT_BYTES = Number(process.env.NEXT_PUBLIC_MAX_ATTACHMENT_BYTES ?? 10 * 1024 * 1024);
 
 function isAllowedMime(mime: string) {
@@ -37,10 +42,20 @@ export default function NewTicketPage() {
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [createdTicketId, setCreatedTicketId] = useState<string | null>(null);
+  const [projectQuery, setProjectQuery] = useState('');
+  const [debouncedProjectQuery, setDebouncedProjectQuery] = useState('');
+  const [projectOptions, setProjectOptions] = useState<ProjectOption[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState(false);
+  const [projectsError, setProjectsError] = useState<string | null>(null);
+  const [selectedProjectName, setSelectedProjectName] = useState('');
+  const [projectDropdownOpen, setProjectDropdownOpen] = useState(false);
 
   const {
     register,
     handleSubmit,
+    setValue,
+    watch,
     trigger,
     formState: { errors }
   } = useForm<TicketFormValues>({
@@ -52,8 +67,57 @@ export default function NewTicketPage() {
       description: ''
     }
   });
+  const projectIdValue = watch('projectId');
 
   const acceptedLabel = useMemo(() => `Images and PDFs up to ${Math.round(MAX_ATTACHMENT_BYTES / (1024 * 1024))}MB`, []);
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setDebouncedProjectQuery(projectQuery.trim());
+    }, 300);
+
+    return () => clearTimeout(timeout);
+  }, [projectQuery]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function loadProjects() {
+      setProjectsLoading(true);
+      setProjectsError(null);
+
+      try {
+        const params = new URLSearchParams({
+          q: debouncedProjectQuery,
+          page: '1',
+          pageSize: '20',
+          sort: 'name',
+          order: 'asc'
+        });
+
+        const response = await fetch(`/api/backend/projects?${params.toString()}`, { signal: controller.signal });
+        if (!response.ok) {
+          throw new Error('Failed to load projects');
+        }
+
+        const data = (await response.json()) as { items?: Array<{ id: string; name: string }> };
+        const items = Array.isArray(data.items) ? data.items : [];
+        setProjectOptions(items.map((project) => ({ id: project.id, name: project.name })));
+      } catch (error) {
+        if ((error as Error).name === 'AbortError') {
+          return;
+        }
+        setProjectsError(error instanceof Error ? error.message : 'Failed to load projects');
+        setProjectOptions([]);
+      } finally {
+        setProjectsLoading(false);
+      }
+    }
+
+    void loadProjects();
+
+    return () => controller.abort();
+  }, [debouncedProjectQuery]);
 
   const addFiles = (files: FileList | null) => {
     if (!files) {
@@ -101,28 +165,35 @@ export default function NewTicketPage() {
     setSubmitting(true);
 
     try {
-      const createRes = await fetch('/api/backend/tickets', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(values)
-      });
+      let ticketId = createdTicketId;
+      if (!ticketId) {
+        const createRes = await fetch('/api/backend/tickets', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(values)
+        });
 
-      if (!createRes.ok) {
-        const message = await createRes.text();
-        throw new Error(message || 'Failed to create ticket');
+        if (!createRes.ok) {
+          const message = await createRes.text();
+          throw new Error(message || 'Failed to create ticket');
+        }
+
+        const ticket = (await createRes.json()) as { id: string };
+        ticketId = ticket.id;
+        setCreatedTicketId(ticketId);
       }
 
-      const ticket = (await createRes.json()) as { id: string };
+      let hasUploadFailure = false;
 
       for (const fileEntry of selectedFiles) {
-        if (fileEntry.state === 'failed') {
+        if (fileEntry.state === 'done') {
           continue;
         }
 
         setFileState(fileEntry.id, 'uploading');
 
         try {
-          const presignRes = await fetch(`/api/backend/tickets/${ticket.id}/attachments/presign-upload`, {
+          const presignRes = await fetch(`/api/backend/tickets/${ticketId}/attachments/presign-upload`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -156,8 +227,13 @@ export default function NewTicketPage() {
 
           setFileState(fileEntry.id, 'done');
         } catch (error) {
+          hasUploadFailure = true;
           setFileState(fileEntry.id, 'failed', error instanceof Error ? error.message : 'Upload failed');
         }
+      }
+
+      if (hasUploadFailure) {
+        throw new Error('Some attachments failed to upload. Please retry.');
       }
 
       router.push('/tickets');
@@ -167,6 +243,7 @@ export default function NewTicketPage() {
       setSubmitting(false);
     }
   };
+  const handleFinalSubmit = handleSubmit(onSubmit);
 
   return (
     <main>
@@ -177,15 +254,68 @@ export default function NewTicketPage() {
         </Link>
       </div>
 
-      <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
+      <form
+        className="space-y-6"
+        onSubmit={(event) => {
+          event.preventDefault();
+        }}
+      >
         <div className="rounded-md border border-slate-200 bg-white p-4">
           <p className="text-sm font-medium text-slate-700">Step {step} of 2</p>
 
           {step === 1 && (
             <div className="mt-4 space-y-4">
               <label className="block">
-                <span className="mb-1 block text-sm font-medium">Project ID</span>
-                <input className="w-full rounded-md border border-slate-300 px-3 py-2" {...register('projectId')} />
+                <span className="mb-1 block text-sm font-medium">Project</span>
+                <input type="hidden" {...register('projectId')} />
+                <div className="relative">
+                  <input
+                    className="w-full rounded-md border border-slate-300 px-3 py-2"
+                    onChange={(event) => {
+                      setProjectQuery(event.target.value);
+                      setValue('projectId', '', { shouldValidate: true });
+                      setSelectedProjectName('');
+                      setProjectDropdownOpen(true);
+                    }}
+                    onFocus={() => setProjectDropdownOpen(true)}
+                    placeholder="Search project..."
+                    value={projectQuery}
+                  />
+
+                  {projectDropdownOpen && (
+                    <div className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md border border-slate-200 bg-white shadow-sm">
+                      {projectsLoading && <div className="px-3 py-2 text-sm text-slate-500">Loading projects...</div>}
+                      {!projectsLoading && projectsError && (
+                        <div className="px-3 py-2 text-sm text-red-600">{projectsError}</div>
+                      )}
+                      {!projectsLoading && !projectsError && projectOptions.length === 0 && (
+                        <div className="px-3 py-2 text-sm text-slate-500">No projects found.</div>
+                      )}
+                      {!projectsLoading &&
+                        !projectsError &&
+                        projectOptions.map((project) => (
+                          <button
+                            className="block w-full px-3 py-2 text-left text-sm hover:bg-slate-100"
+                            key={project.id}
+                            onClick={() => {
+                              setValue('projectId', project.id, { shouldValidate: true });
+                              setSelectedProjectName(project.name);
+                              setProjectQuery(project.name);
+                              setProjectDropdownOpen(false);
+                            }}
+                            type="button"
+                          >
+                            {project.name}
+                          </button>
+                        ))}
+                    </div>
+                  )}
+                </div>
+                {projectIdValue && (
+                  <span className="mt-1 block text-xs text-slate-500">
+                    Selected: {selectedProjectName || projectIdValue}
+                  </span>
+                )}
                 {errors.projectId && <span className="mt-1 block text-sm text-red-600">{errors.projectId.message}</span>}
               </label>
 
@@ -281,7 +411,12 @@ export default function NewTicketPage() {
               Continue
             </button>
           ) : (
-            <button className="rounded-md border border-slate-300 bg-white px-4 py-2" disabled={submitting} type="submit">
+            <button
+              className="rounded-md border border-slate-300 bg-white px-4 py-2"
+              disabled={submitting}
+              onClick={() => void handleFinalSubmit()}
+              type="button"
+            >
               {submitting ? 'Creating...' : 'Create Ticket'}
             </button>
           )}
