@@ -62,6 +62,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.email = claims?.email ?? token.email;
       }
 
+      if (account?.id_token) {
+        token.idToken = account.id_token;
+      }
+
       return token;
     },
     async session({ session, token }) {
@@ -72,7 +76,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
       session.roles = Array.isArray(token.roles) ? (token.roles as string[]) : [];
       session.customerId = typeof token.customerId === 'string' ? token.customerId : null;
-      session.user.email = typeof token.email === 'string' ? token.email : null;
+      session.user.email = typeof token.email === 'string' ? token.email : '';
 
       return session;
     }
