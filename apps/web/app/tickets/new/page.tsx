@@ -86,10 +86,13 @@ export default function NewTicketPage() {
       setProjectsError(null);
 
       try {
-        const params = new URLSearchParams({ pageSize: '20' });
-        if (debouncedProjectQuery) {
-          params.set('q', debouncedProjectQuery);
-        }
+        const params = new URLSearchParams({
+          q: debouncedProjectQuery,
+          page: '1',
+          pageSize: '20',
+          sort: 'name',
+          order: 'asc'
+        });
 
         const response = await fetch(`/api/backend/projects?${params.toString()}`, { signal: controller.signal });
         if (!response.ok) {
@@ -251,6 +254,8 @@ export default function NewTicketPage() {
                     className="w-full rounded-md border border-slate-300 px-3 py-2"
                     onChange={(event) => {
                       setProjectQuery(event.target.value);
+                      setValue('projectId', '', { shouldValidate: true });
+                      setSelectedProjectName('');
                       setProjectDropdownOpen(true);
                     }}
                     onFocus={() => setProjectDropdownOpen(true)}
