@@ -13,6 +13,19 @@ After login, use the top navigation:
 - `TIBA Board` for role-specific operational views.
 - `Logout` to trigger SSO logout via `/logout`.
 
+## TIBA Board
+
+Open `/tiba` to use operational triage tabs:
+- `New`: unassigned incoming tickets (`view=new`).
+- `Open`: active work queue (`view=open`).
+- `My`: tickets assigned to your user (`view=my`).
+- `Closed`: resolved items (`status=CLOSED`).
+
+Board actions:
+- `Assign to me` in `New` assigns the ticket to your current user.
+- In `Open`/`My`, change status inline (`OPEN`, `IN_PROGRESS`, `CLOSED`).
+- Click a ticket title to open detail view at `/tickets/[id]`.
+
 ## Planned Flows
 
 - Access internal dashboard
