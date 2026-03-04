@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useEffect, useState } from 'react';
+import { AssigneeSelect } from '@/components/users/assignee-select';
 
 type TicketComment = {
   id: string;
@@ -41,26 +42,10 @@ type SelectedFile = {
   error?: string;
 };
 
-type UserOption = {
-  id: string;
-  username: string | null;
-  email: string | null;
-  firstName: string | null;
-  lastName: string | null;
-};
-
 const MAX_ATTACHMENT_BYTES = Number(process.env.NEXT_PUBLIC_MAX_ATTACHMENT_BYTES ?? 10 * 1024 * 1024);
 
 function isAllowedMime(mime: string) {
   return mime === 'application/pdf' || mime.startsWith('image/');
-}
-
-function formatUserLabel(user: UserOption) {
-  const name = `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim();
-  if (name) {
-    return `${name} (${user.username ?? user.email ?? user.id})`;
-  }
-  return user.username ?? user.email ?? user.id;
 }
 
 export default function TicketDetailPage() {
@@ -81,11 +66,6 @@ export default function TicketDetailPage() {
   const [statusUpdating, setStatusUpdating] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
 
-  const [assigneeQuery, setAssigneeQuery] = useState('');
-  const [debouncedAssigneeQuery, setDebouncedAssigneeQuery] = useState('');
-  const [users, setUsers] = useState<UserOption[]>([]);
-  const [usersLoading, setUsersLoading] = useState(false);
-  const [usersError, setUsersError] = useState<string | null>(null);
   const [selectedAssigneeUserId, setSelectedAssigneeUserId] = useState<string | null>(null);
   const [assignUpdating, setAssignUpdating] = useState(false);
   const [assignError, setAssignError] = useState<string | null>(null);
@@ -93,14 +73,6 @@ export default function TicketDetailPage() {
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
   const [uploadingAttachments, setUploadingAttachments] = useState(false);
   const [attachmentsError, setAttachmentsError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-      setDebouncedAssigneeQuery(assigneeQuery.trim());
-    }, 300);
-
-    return () => clearTimeout(timeout);
-  }, [assigneeQuery]);
 
   const loadTicket = async () => {
     setLoading(true);
@@ -128,42 +100,6 @@ export default function TicketDetailPage() {
     }
     void loadTicket();
   }, [ticketId]);
-
-  useEffect(() => {
-    if (!isTibaUser) {
-      return;
-    }
-
-    const controller = new AbortController();
-
-    async function loadUsers() {
-      setUsersLoading(true);
-      setUsersError(null);
-
-      try {
-        const paramsObj = new URLSearchParams({ q: debouncedAssigneeQuery, limit: '20' });
-        const response = await fetch(`/api/backend/users?${paramsObj.toString()}`, { signal: controller.signal });
-        if (!response.ok) {
-          throw new Error(await response.text());
-        }
-
-        const data = (await response.json()) as UserOption[];
-        setUsers(data);
-      } catch (usersLoadError) {
-        if ((usersLoadError as Error).name === 'AbortError') {
-          return;
-        }
-        setUsersError(usersLoadError instanceof Error ? usersLoadError.message : 'Failed to load users');
-        setUsers([]);
-      } finally {
-        setUsersLoading(false);
-      }
-    }
-
-    void loadUsers();
-
-    return () => controller.abort();
-  }, [debouncedAssigneeQuery, isTibaUser]);
 
   const submitComment = async () => {
     if (!commentBody.trim()) {
@@ -405,59 +341,23 @@ export default function TicketDetailPage() {
                 </div>
 
                 <div>
-                  <label className="mb-1 block text-sm font-medium">Assignee</label>
-                  <input
-                    className="w-full rounded-md border border-slate-300 px-3 py-2"
-                    onChange={(event) => setAssigneeQuery(event.target.value)}
-                    placeholder="Search users..."
-                    value={assigneeQuery}
+                  <AssigneeSelect
+                    allowUnassigned
+                    disabled={assignUpdating}
+                    onChange={(assigneeUserId) => setSelectedAssigneeUserId(assigneeUserId)}
+                    value={selectedAssigneeUserId}
                   />
-
-                  <div className="mt-2 max-h-40 overflow-auto rounded-md border border-slate-200">
-                    {usersLoading && <div className="px-3 py-2 text-sm text-slate-500">Loading users...</div>}
-                    {!usersLoading && usersError && <div className="px-3 py-2 text-sm text-red-600">{usersError}</div>}
-                    {!usersLoading && !usersError && users.length === 0 && (
-                      <div className="px-3 py-2 text-sm text-slate-500">No users found.</div>
-                    )}
-                    {!usersLoading &&
-                      !usersError &&
-                      users.map((user) => (
-                        <button
-                          className="block w-full px-3 py-2 text-left text-sm hover:bg-slate-100"
-                          key={user.id}
-                          onClick={() => setSelectedAssigneeUserId(user.id)}
-                          type="button"
-                        >
-                          {formatUserLabel(user)}
-                        </button>
-                      ))}
-                  </div>
-
-                  <p className="mt-2 text-xs text-slate-500">Selected: {selectedAssigneeUserId ?? 'unassigned'}</p>
 
                   <div className="mt-2 flex gap-2">
                     <button
                       className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
-                      disabled={assignUpdating || !selectedAssigneeUserId}
-                      onClick={() => {
-                        if (selectedAssigneeUserId) {
-                          void updateAssignee(selectedAssigneeUserId);
-                        }
-                      }}
-                      type="button"
-                    >
-                      Assign selected
-                    </button>
-                    <button
-                      className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
                       disabled={assignUpdating}
                       onClick={() => {
-                        setSelectedAssigneeUserId(null);
-                        void updateAssignee(null);
+                        void updateAssignee(selectedAssigneeUserId);
                       }}
                       type="button"
                     >
-                      Unassign
+                      Save assignee
                     </button>
                   </div>
                   {assignError && <p className="mt-1 text-sm text-red-600">{assignError}</p>}
