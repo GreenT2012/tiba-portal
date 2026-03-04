@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
+import { AssigneeOption, assigneeDisplayLabel } from '@/components/users/assignee-select';
 
 type TicketSummary = {
   id: string;
@@ -10,6 +11,7 @@ type TicketSummary = {
   type: string;
   projectId: string;
   assigneeUserId: string | null;
+  assignee?: AssigneeOption | null;
   updatedAt: string;
 };
 
@@ -54,6 +56,13 @@ function shortAssignee(assigneeUserId: string | null, currentUserSub: string): s
     return 'me';
   }
   return assigneeUserId.slice(0, 8);
+}
+
+function assigneeForDisplay(ticket: TicketSummary, currentUserSub: string): string {
+  if (ticket.assignee) {
+    return assigneeDisplayLabel(ticket.assignee);
+  }
+  return shortAssignee(ticket.assigneeUserId, currentUserSub);
 }
 
 export function TibaBoard({ currentUserSub }: { currentUserSub: string }) {
@@ -246,7 +255,7 @@ export function TibaBoard({ currentUserSub }: { currentUserSub: string }) {
                   <td className="px-3 py-2">{ticket.type}</td>
                   <td className="px-3 py-2">{ticket.status}</td>
                   <td className="px-3 py-2">{new Date(ticket.updatedAt).toLocaleString()}</td>
-                  <td className="px-3 py-2">{shortAssignee(ticket.assigneeUserId, currentUserSub)}</td>
+                  <td className="px-3 py-2">{assigneeForDisplay(ticket, currentUserSub)}</td>
                   <td className="px-3 py-2">{ticket.projectId}</td>
                   <td className="px-3 py-2">
                     {activeTab === 'new' ? (

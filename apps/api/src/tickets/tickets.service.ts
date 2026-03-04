@@ -2,13 +2,15 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
-  NotFoundException
+  NotFoundException,
+  Optional
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { AuditService } from '../audit/audit.service';
 import { AuthUser } from '../auth/auth-user.interface';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
+import { UsersService } from '../users/users.service';
 import { toTicketCommentDto, toTicketDto, toTicketSummaryDto } from './tickets.mapper';
 import { AssignTicketDto } from './dto/assign-ticket.dto';
 import { CreateTicketCommentDto } from './dto/create-ticket-comment.dto';
@@ -32,7 +34,8 @@ export class TicketsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
-    private readonly storageService: StorageService
+    private readonly storageService: StorageService,
+    @Optional() private readonly usersService?: UsersService
   ) {}
 
   async listTickets(user: AuthUser, query: ListTicketsDto): Promise<TicketListResponseDto> {
@@ -175,7 +178,17 @@ export class TicketsService {
     });
 
     this.assertTicketVisible(user, ticket);
-    return toTicketDto(ticket as any);
+    const dto = toTicketDto(ticket as any);
+
+    if (dto.assigneeUserId && this.usersService) {
+      try {
+        dto.assignee = await this.usersService.getUserById(dto.assigneeUserId);
+      } catch {
+        dto.assignee = null;
+      }
+    }
+
+    return dto;
   }
 
   async updateTicketStatus(user: AuthUser, id: string, dto: UpdateTicketStatusDto): Promise<TicketDto> {

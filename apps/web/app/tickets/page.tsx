@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { AssigneeOption, assigneeDisplayLabel } from '@/components/users/assignee-select';
 
 type TicketSummary = {
   id: string;
@@ -10,6 +11,7 @@ type TicketSummary = {
   type: string;
   projectId: string;
   assigneeUserId: string | null;
+  assignee?: AssigneeOption | null;
   updatedAt: string;
 };
 
@@ -66,7 +68,13 @@ export default function TicketsPage() {
                   {ticket.type} - {ticket.status} - project {ticket.projectId}
                 </p>
                 <p className="mt-1 text-xs text-slate-500">
-                  assignee: {ticket.assigneeUserId ?? 'unassigned'} - updated {new Date(ticket.updatedAt).toLocaleString()}
+                  assignee:{' '}
+                  {ticket.assignee
+                    ? assigneeDisplayLabel(ticket.assignee)
+                    : ticket.assigneeUserId
+                      ? ticket.assigneeUserId.slice(0, 8)
+                      : 'unassigned'}{' '}
+                  - updated {new Date(ticket.updatedAt).toLocaleString()}
                 </p>
               </Link>
             ))
