@@ -19,6 +19,14 @@ export type TicketAttachmentDto = {
   createdAt: Date;
 };
 
+export type TicketAssigneeDto = {
+  id: string;
+  username: string | null;
+  email: string | null;
+  firstName: string | null;
+  lastName: string | null;
+};
+
 export type TicketSummaryDto = {
   id: string;
   title: string;
@@ -27,6 +35,7 @@ export type TicketSummaryDto = {
   projectId: string;
   customerId: string;
   assigneeUserId: string | null;
+  assignee?: TicketAssigneeDto | null;
   createdAt: Date;
   updatedAt: Date;
 };

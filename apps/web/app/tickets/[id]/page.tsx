@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useEffect, useState } from 'react';
-import { AssigneeSelect } from '@/components/users/assignee-select';
+import { AssigneeOption, AssigneeSelect, assigneeDisplayLabel } from '@/components/users/assignee-select';
 
 type TicketComment = {
   id: string;
@@ -28,6 +28,7 @@ type TicketDetail = {
   status: 'OPEN' | 'IN_PROGRESS' | 'CLOSED';
   updatedAt: string;
   assigneeUserId: string | null;
+  assignee?: AssigneeOption | null;
   description: string;
   comments: TicketComment[];
   attachments: TicketAttachment[];
@@ -295,6 +296,12 @@ export default function TicketDetailPage() {
     }
   };
 
+  const assigneeText = ticket?.assignee
+    ? assigneeDisplayLabel(ticket.assignee)
+    : ticket?.assigneeUserId
+      ? ticket.assigneeUserId.slice(0, 8)
+      : 'unassigned';
+
   return (
     <main>
       <div className="mb-6 flex items-center justify-between">
@@ -315,7 +322,7 @@ export default function TicketDetailPage() {
             <p className="mt-3 text-sm text-slate-600">
               {ticket.type} - {ticket.status} - updated {new Date(ticket.updatedAt).toLocaleString()}
             </p>
-            <p className="mt-1 text-sm text-slate-600">assignee: {ticket.assigneeUserId ?? 'unassigned'}</p>
+            <p className="mt-1 text-sm text-slate-600">assignee: {assigneeText}</p>
           </section>
 
           {isTibaUser && (
@@ -345,6 +352,7 @@ export default function TicketDetailPage() {
                     allowUnassigned
                     disabled={assignUpdating}
                     onChange={(assigneeUserId) => setSelectedAssigneeUserId(assigneeUserId)}
+                    selectedAssignee={ticket.assignee ?? null}
                     value={selectedAssigneeUserId}
                   />
 

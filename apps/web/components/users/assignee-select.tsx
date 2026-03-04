@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 
-type UserOption = {
+export type AssigneeOption = {
   id: string;
   username: string | null;
   email: string | null;
@@ -16,9 +16,10 @@ type AssigneeSelectProps = {
   disabled?: boolean;
   allowUnassigned?: boolean;
   label?: string;
+  selectedAssignee?: AssigneeOption | null;
 };
 
-function primaryLabel(user: UserOption): string {
+export function assigneePrimaryLabel(user: AssigneeOption): string {
   const fullName = `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim();
   if (fullName) {
     return fullName;
@@ -26,13 +27,13 @@ function primaryLabel(user: UserOption): string {
   return user.username ?? user.email ?? user.id;
 }
 
-function secondaryLabel(user: UserOption): string {
+export function assigneeSecondaryLabel(user: AssigneeOption): string {
   return user.email ?? '';
 }
 
-function selectedDisplay(user: UserOption): string {
-  const primary = primaryLabel(user);
-  const secondary = secondaryLabel(user);
+export function assigneeDisplayLabel(user: AssigneeOption): string {
+  const primary = assigneePrimaryLabel(user);
+  const secondary = assigneeSecondaryLabel(user);
   return secondary ? `${primary} (${secondary})` : primary;
 }
 
@@ -41,15 +42,16 @@ export function AssigneeSelect({
   onChange,
   disabled,
   allowUnassigned = true,
-  label = 'Assignee'
+  label = 'Assignee',
+  selectedAssignee
 }: AssigneeSelectProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
-  const [users, setUsers] = useState<UserOption[]>([]);
+  const [users, setUsers] = useState<AssigneeOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedText, setSelectedText] = useState<string | null>(null);
+  const [knownUsers, setKnownUsers] = useState<Record<string, AssigneeOption>>({});
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -77,8 +79,16 @@ export function AssigneeSelect({
           throw new Error(await response.text());
         }
 
-        const data = (await response.json()) as UserOption[];
-        setUsers(Array.isArray(data) ? data : []);
+        const data = (await response.json()) as AssigneeOption[];
+        const nextUsers = Array.isArray(data) ? data : [];
+        setUsers(nextUsers);
+        setKnownUsers((prev) => {
+          const next = { ...prev };
+          for (const user of nextUsers) {
+            next[user.id] = user;
+          }
+          return next;
+        });
       } catch (loadError) {
         if ((loadError as Error).name === 'AbortError') {
           return;
@@ -96,18 +106,24 @@ export function AssigneeSelect({
     return () => controller.abort();
   }, [open, debouncedQuery]);
 
-  const selectedUserFromList = useMemo(() => users.find((user) => user.id === value) ?? null, [users, value]);
-
   useEffect(() => {
-    if (selectedUserFromList) {
-      setSelectedText(selectedDisplay(selectedUserFromList));
-      return;
+    if (selectedAssignee) {
+      setKnownUsers((prev) => ({ ...prev, [selectedAssignee.id]: selectedAssignee }));
+    }
+  }, [selectedAssignee]);
+
+  const selectedText = useMemo(() => {
+    if (value === null) {
+      return 'Unassigned';
     }
 
-    if (value === null) {
-      setSelectedText(null);
+    const user = knownUsers[value] ?? (selectedAssignee?.id === value ? selectedAssignee : null);
+    if (!user) {
+      return `Assignee ${value.slice(0, 8)}`;
     }
-  }, [selectedUserFromList, value]);
+
+    return assigneeDisplayLabel(user);
+  }, [knownUsers, selectedAssignee, value]);
 
   return (
     <div>
@@ -118,7 +134,7 @@ export function AssigneeSelect({
         onClick={() => setOpen((prev) => !prev)}
         type="button"
       >
-        {value === null ? 'Unassigned' : selectedText ?? 'Selected assignee'}
+        {selectedText}
       </button>
 
       {open && (
@@ -138,7 +154,6 @@ export function AssigneeSelect({
                 className="block w-full border-b border-slate-100 px-3 py-2 text-left text-sm hover:bg-slate-100"
                 onClick={() => {
                   onChange(null);
-                  setSelectedText(null);
                   setOpen(false);
                 }}
                 type="button"
@@ -155,13 +170,12 @@ export function AssigneeSelect({
                   key={user.id}
                   onClick={() => {
                     onChange(user.id);
-                    setSelectedText(selectedDisplay(user));
                     setOpen(false);
                   }}
                   type="button"
                 >
-                  <p className="text-sm text-slate-900">{primaryLabel(user)}</p>
-                  {secondaryLabel(user) && <p className="text-xs text-slate-500">{secondaryLabel(user)}</p>}
+                  <p className="text-sm text-slate-900">{assigneePrimaryLabel(user)}</p>
+                  {assigneeSecondaryLabel(user) && <p className="text-xs text-slate-500">{assigneeSecondaryLabel(user)}</p>}
                 </button>
               ))}
           </div>
