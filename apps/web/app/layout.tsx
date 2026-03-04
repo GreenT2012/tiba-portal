@@ -1,4 +1,6 @@
 import type { Metadata } from 'next';
+import { auth } from '@/auth';
+import { TopNav } from '@/components/nav/top-nav';
 import { Providers } from '@/components/providers';
 import './globals.css';
 
@@ -7,11 +9,16 @@ export const metadata: Metadata = {
   description: 'Customer portal and internal dashboard'
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const session = await auth();
+
   return (
     <html lang="en">
-      <body>
-        <Providers>{children}</Providers>
+      <body className="bg-slate-50 text-slate-900">
+        <Providers>
+          {session ? <TopNav email={session.user.email} roles={session.roles ?? []} /> : null}
+          <div className="mx-auto max-w-6xl px-4 py-6">{children}</div>
+        </Providers>
       </body>
     </html>
   );

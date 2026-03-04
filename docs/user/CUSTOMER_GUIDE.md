@@ -4,6 +4,14 @@
 
 This guide documents customer-facing portal flows.
 
+## Navigation
+
+After login, use the top navigation:
+- `Dashboard` for authenticated user context.
+- `Tickets` for ticket list and detail pages.
+- `New Ticket` for the ticket creation wizard.
+- `Logout` to trigger SSO logout via `/logout`.
+
 ## Login Flow (MVP)
 
 1. Open `http://localhost:3000` and click `Login`.
@@ -31,6 +39,5 @@ This guide documents customer-facing portal flows.
 
 ## Logout Options
 
-- `Logout (SSO)` from the dashboard clears the app session and calls Keycloak end-session (with `id_token_hint`).
-- After `Logout (SSO)`, the next login should show the Keycloak credential screen (no automatic SSO re-entry).
-- App-only logout (if used elsewhere) clears only the local app session and may keep the Keycloak SSO session active.
+- `Logout` in the header uses `/logout` for SSO logout.
+- After logout, the next login should show the Keycloak credential screen (no automatic SSO re-entry).
