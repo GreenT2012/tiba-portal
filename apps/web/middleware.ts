@@ -12,5 +12,5 @@ export default auth((req) => {
 });
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/tickets/:path*']
+  matcher: ['/dashboard/:path*', '/tickets/:path*', '/tiba/:path*']
 };
