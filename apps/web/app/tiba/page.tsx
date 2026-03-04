@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
+import { TibaBoard } from './tiba-board';
 
 export default async function TibaPage() {
   const session = await auth();
@@ -11,13 +12,8 @@ export default async function TibaPage() {
   }
 
   if (!isTiba) {
-    redirect('/dashboard');
+    redirect('/tickets');
   }
 
-  return (
-    <main>
-      <h1 className="text-2xl font-semibold">TIBA Board</h1>
-      <p className="mt-2 text-slate-600">Board views are available in this section for TIBA roles.</p>
-    </main>
-  );
+  return <TibaBoard currentUserSub={session.user.sub} />;
 }
