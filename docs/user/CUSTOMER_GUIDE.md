@@ -24,7 +24,7 @@ After login, use the top navigation:
 1. Login and open `/tickets`.
 2. Click `New Ticket`.
 3. Fill the wizard details step:
-   - `Project` (searchable dropdown, scoped to your customer projects)
+   - `Project` (searchable dropdown, scoped to your active customer projects; archived projects are hidden)
    - `type`
    - `title`
    - `description`
