@@ -1,4 +1,5 @@
 export class CreateProjectDto {
-  customerId!: string;
+  customerId?: string;
+  customerName?: string;
   name!: string;
 }

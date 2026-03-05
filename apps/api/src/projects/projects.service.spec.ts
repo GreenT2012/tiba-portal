@@ -5,7 +5,8 @@ function makePrismaMock() {
   const prisma = {
     $transaction: jest.fn((queries: unknown[]) => Promise.all(queries as Promise<unknown>[])),
     customer: {
-      findUnique: jest.fn()
+      findUnique: jest.fn(),
+      findMany: jest.fn()
     },
     project: {
       findMany: jest.fn(),
@@ -111,6 +112,52 @@ describe('ProjectsService', () => {
 
     expect(prisma.customer.findUnique).toHaveBeenCalledWith({ where: { id: 'c1' } });
     expect(result).toMatchObject({ id: 'p9', customerId: 'c1', name: 'Ops', isArchived: false });
+  });
+
+  it('creates project via customerName lookup for tiba_admin', async () => {
+    const prisma = makePrismaMock();
+    const service = new ProjectsService(prisma as any);
+    prisma.customer.findMany.mockResolvedValue([{ id: 'c-name' }]);
+    prisma.customer.findUnique.mockResolvedValue({ id: 'c-name' });
+    prisma.project.create.mockResolvedValue({
+      id: 'p10',
+      customer_id: 'c-name',
+      name: 'Support',
+      is_archived: false,
+      created_at: new Date('2026-01-01T00:00:00.000Z'),
+      updated_at: new Date('2026-01-02T00:00:00.000Z')
+    });
+
+    const result = await service.createProject(
+      { sub: 'admin1', roles: ['tiba_admin'], customerId: null, email: 'admin@example.com' },
+      { customerName: 'ACME', name: 'Support' }
+    );
+
+    expect(prisma.customer.findMany).toHaveBeenCalledWith({
+      where: { name: 'ACME' },
+      select: { id: true },
+      take: 2
+    });
+    expect(prisma.project.create).toHaveBeenCalledWith({
+      data: {
+        customer_id: 'c-name',
+        name: 'Support'
+      }
+    });
+    expect(result).toMatchObject({ id: 'p10', customerId: 'c-name', name: 'Support' });
+  });
+
+  it('returns 400 when customerName lookup has no match', async () => {
+    const prisma = makePrismaMock();
+    const service = new ProjectsService(prisma as any);
+    prisma.customer.findMany.mockResolvedValue([]);
+
+    await expect(
+      service.createProject(
+        { sub: 'admin1', roles: ['tiba_admin'], customerId: null, email: 'admin@example.com' },
+        { customerName: 'Unknown', name: 'Support' }
+      )
+    ).rejects.toThrow('Customer not found for customerName "Unknown"');
   });
 
   it('updates project name and archive state for tiba_admin', async () => {

@@ -13,3 +13,4 @@
 - Add customer ticket creation wizard in web with attachment step and BFF-based ticket list loading via `/api/backend/*`.
 - Add `GET /api/v1/projects` with tenant-scoped customer access, internal cross-tenant filtering, pagination, sorting, and search for project dropdowns.
 - Add `GET /api/v1/users` for TIBA roles, backed by Keycloak Admin API client credentials, to search assignable users.
+- Extend TIBA project management APIs with reliable `PATCH /api/v1/projects/:id`, plus `POST /api/v1/projects` support for `{ customerName, name }` lookup in addition to `{ customerId, name }`.
