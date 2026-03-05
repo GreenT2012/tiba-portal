@@ -10,7 +10,8 @@
 - `GET /me` (authenticated) -> `{ "sub": string, "roles": string[], "customerId": string | null, "email": string | null }`
 - `GET /users` (tiba roles only) -> `[{ "id", "username", "email", "firstName", "lastName" }]`
 - `GET /projects` -> `{ items, page, pageSize, total }` with camelCase project keys
-- `GET /projects/:id` -> `{ id, customerId, name, createdAt, updatedAt }` (tenant scoped for `customer_user`)
+- `POST /projects` (tiba roles only) -> create project `{ customerId, name }`
+- `PATCH /projects/:id` (tiba roles only) -> update project `{ name?, isArchived? }`
 - `GET /tickets` -> `{ items, page, pageSize, total }` with camelCase ticket summary keys
 - `POST /tickets` -> returns `TicketDto` in camelCase
 - `GET /tickets/:id` -> returns `TicketDto` in camelCase
@@ -47,11 +48,11 @@ Projects list query params:
 - `order` (`asc` | `desc`, default `asc`)
 
 Projects response item example:
-- `{ "id": "...", "customerId": "...", "name": "...", "createdAt": "...", "updatedAt": "..." }`
+- `{ "id": "...", "customerId": "...", "name": "...", "isArchived": false, "createdAt": "...", "updatedAt": "..." }`
 
-Project detail (`GET /projects/:id`) authorization:
-- `customer_user`: allowed only if project belongs to token `customerId`
-- `tiba_agent` / `tiba_admin`: can access any project
+Project management policy:
+- Prefer archive/unarchive via `PATCH /projects/:id` (`isArchived`) instead of hard-delete.
+- `customer_user` is forbidden from project create/update operations.
 
 Create ticket (`POST /tickets`) behavior:
 - Request body: `{ projectId, type, title, description, status?, assigneeUserId?, customerId? }`
@@ -63,10 +64,6 @@ Create ticket (`POST /tickets`) behavior:
   - `customerId` is not required when `projectId` is provided
   - tenant/customer is always derived from selected `projectId`
   - optional `assigneeUserId` is allowed at creation
-
-Ticket list filters (`GET /tickets`):
-- `projectId` (exact match)
-- `status` (`OPEN` | `IN_PROGRESS` | `CLOSED`)
 
 Users query params:
 - `q` (optional, search by username/email)
