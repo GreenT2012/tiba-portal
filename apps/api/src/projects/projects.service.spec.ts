@@ -6,7 +6,8 @@ function makePrismaMock() {
     $transaction: jest.fn((queries: unknown[]) => Promise.all(queries as Promise<unknown>[])),
     project: {
       findMany: jest.fn(),
-      count: jest.fn()
+      count: jest.fn(),
+      findUnique: jest.fn()
     }
   };
 
@@ -70,6 +71,22 @@ describe('ProjectsService', () => {
         { sub: 'u1', roles: ['customer_user'], customerId: 'c1', email: 'u1@example.com' },
         { customerId: 'c2' }
       )
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('forbids customer_user from reading project in another tenant', async () => {
+    const prisma = makePrismaMock();
+    const service = new ProjectsService(prisma as any);
+    prisma.project.findUnique.mockResolvedValue({
+      id: 'p2',
+      customer_id: 'c2',
+      name: 'Cross tenant',
+      created_at: new Date('2026-01-01T00:00:00.000Z'),
+      updated_at: new Date('2026-01-02T00:00:00.000Z')
+    });
+
+    await expect(
+      service.getProjectById({ sub: 'u1', roles: ['customer_user'], customerId: 'c1', email: 'u1@example.com' }, 'p2')
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 });

@@ -55,6 +55,29 @@ function makeStorageMock() {
 }
 
 describe('TicketsService audit logging', () => {
+  it('filters ticket list by projectId', async () => {
+    const { prisma } = makePrismaMock();
+    const storage = makeStorageMock();
+    prisma.ticket.findMany.mockResolvedValue([]);
+    prisma.ticket.count.mockResolvedValue(0);
+
+    const service = new TicketsService(prisma as any, new AuditService(prisma as any), storage as any);
+
+    await service.listTickets(
+      { sub: 'u1', roles: ['customer_user'], customerId: 'c1', email: null },
+      { projectId: 'p1' }
+    );
+
+    expect(prisma.ticket.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          customer_id: 'c1',
+          project_id: 'p1'
+        })
+      })
+    );
+  });
+
   it('writes created audit event on createTicket', async () => {
     const { prisma, tx } = makePrismaMock();
     const storage = makeStorageMock();

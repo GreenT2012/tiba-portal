@@ -1,10 +1,10 @@
-import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { AuthUser } from '../auth/auth-user.interface';
 import { PrismaService } from '../prisma/prisma.service';
 import { ListProjectsDto } from './dto/list-projects.dto';
 import { toProjectDto } from './projects.mapper';
-import { ProjectListResponseDto } from './projects.types';
+import { ProjectDto, ProjectListResponseDto } from './projects.types';
 
 @Injectable()
 export class ProjectsService {
@@ -38,6 +38,27 @@ export class ProjectsService {
       pageSize,
       total
     };
+  }
+
+  async getProjectById(user: AuthUser, id: string): Promise<ProjectDto> {
+    const project = await this.prisma.project.findUnique({ where: { id } });
+
+    if (!project) {
+      throw new NotFoundException('Project not found');
+    }
+
+    if (user.roles.includes('customer_user')) {
+      if (!user.customerId) {
+        throw new ForbiddenException('customer_id claim is required for customer_user');
+      }
+      if (project.customer_id !== user.customerId) {
+        throw new ForbiddenException('Project is outside your tenant scope');
+      }
+    } else if (!user.roles.includes('tiba_agent') && !user.roles.includes('tiba_admin')) {
+      throw new ForbiddenException('Unsupported role');
+    }
+
+    return toProjectDto(project);
   }
 
   private resolveCustomerScope(user: AuthUser, requestedCustomerId?: string): string | undefined {
