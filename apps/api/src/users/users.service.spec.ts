@@ -105,4 +105,29 @@ describe('UsersService', () => {
 
     await expect(service.listUsers({})).rejects.toBeInstanceOf(BadGatewayException);
   });
+
+  it('fetches user by id and maps fields', async () => {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(jsonResponse({ access_token: 'admin-token' }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          id: 'u1',
+          username: 'agent1',
+          email: 'agent1@example.com',
+          firstName: 'Agent',
+          lastName: 'One'
+        })
+      );
+
+    const service = new UsersService();
+    const result = await service.getUserById('u1');
+
+    expect(result).toEqual({
+      id: 'u1',
+      username: 'agent1',
+      email: 'agent1@example.com',
+      firstName: 'Agent',
+      lastName: 'One'
+    });
+  });
 });

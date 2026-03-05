@@ -25,13 +25,29 @@ export class UsersService {
       limit
     });
 
-    return users.map((user) => ({
-      id: user.id,
-      username: user.username ?? null,
-      email: user.email ?? null,
-      firstName: user.firstName ?? null,
-      lastName: user.lastName ?? null
-    }));
+    return users.map((user) => this.toUserDto(user));
+  }
+
+  async getUserById(userId: string): Promise<UserDto | null> {
+    const accessToken = await this.getAdminAccessToken();
+    const realm = process.env.KEYCLOAK_ADMIN_REALM ?? 'tiba';
+    const base = `${this.getKeycloakBaseUrl()}/admin/realms/${encodeURIComponent(realm)}`;
+    const url = `${base}/users/${encodeURIComponent(userId)}`;
+
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+
+    if (response.status === 404) {
+      return null;
+    }
+
+    if (!response.ok) {
+      throw new BadGatewayException('Failed to fetch user from Keycloak admin API');
+    }
+
+    const user = (await response.json()) as KeycloakUser;
+    return this.toUserDto(user);
   }
 
   private parseLimit(rawLimit: string | undefined): number {
@@ -135,5 +151,15 @@ export class UsersService {
 
     const parsed = new URL(trimmedIssuer);
     return parsed.origin;
+  }
+
+  private toUserDto(user: KeycloakUser): UserDto {
+    return {
+      id: user.id,
+      username: user.username ?? null,
+      email: user.email ?? null,
+      firstName: user.firstName ?? null,
+      lastName: user.lastName ?? null
+    };
   }
 }

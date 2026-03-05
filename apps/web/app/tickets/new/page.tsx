@@ -3,15 +3,18 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { AssigneeSelect } from '@/components/users/assignee-select';
 import { z } from 'zod';
 
 const ticketSchema = z.object({
   projectId: z.string().min(1, 'Project is required'),
   type: z.enum(['Bug', 'Feature', 'Content', 'Marketing', 'Tracking', 'Plugin']),
   title: z.string().min(1, 'Title is required'),
-  description: z.string().min(1, 'Description is required')
+  description: z.string().min(1, 'Description is required'),
+  assigneeUserId: z.string().optional()
 });
 
 type TicketFormValues = z.infer<typeof ticketSchema>;
@@ -38,6 +41,8 @@ function isAllowedMime(mime: string) {
 
 export default function NewTicketPage() {
   const router = useRouter();
+  const { data: session } = useSession();
+  const isTibaUser = Boolean(session?.roles?.includes('tiba_agent') || session?.roles?.includes('tiba_admin'));
   const [step, setStep] = useState(1);
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -64,7 +69,8 @@ export default function NewTicketPage() {
       projectId: '',
       type: 'Bug',
       title: '',
-      description: ''
+      description: '',
+      assigneeUserId: undefined
     }
   });
   const projectIdValue = watch('projectId');
@@ -342,6 +348,17 @@ export default function NewTicketPage() {
                 <textarea className="w-full rounded-md border border-slate-300 px-3 py-2" rows={5} {...register('description')} />
                 {errors.description && <span className="mt-1 block text-sm text-red-600">{errors.description.message}</span>}
               </label>
+
+              {isTibaUser && (
+                <AssigneeSelect
+                  allowUnassigned
+                  label="Assignee (optional)"
+                  onChange={(assigneeUserId) => {
+                    setValue('assigneeUserId', assigneeUserId ?? undefined, { shouldDirty: true });
+                  }}
+                  value={watch('assigneeUserId') ?? null}
+                />
+              )}
             </div>
           )}
 
