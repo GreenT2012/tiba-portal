@@ -9,6 +9,9 @@
 - `GET /health` (public) -> `{ "ok": true }`
 - `GET /me` (authenticated) -> `{ "sub": string, "roles": string[], "customerId": string | null, "email": string | null }`
 - `GET /users` (tiba roles only) -> `[{ "id", "username", "email", "firstName", "lastName" }]`
+- `GET /customers` (tiba roles only) -> `{ items, page, pageSize, total }`
+- `POST /customers` (tiba roles only) -> create customer `{ name }`
+- `PATCH /customers/:id` (tiba roles only) -> update customer `{ name }`
 - `GET /projects` -> `{ items, page, pageSize, total }` with camelCase project keys
 - `POST /projects` (tiba roles only) -> create project `{ customerId, name }`
 - `PATCH /projects/:id` (tiba roles only) -> update project `{ name?, isArchived? }`
@@ -42,6 +45,13 @@ Presign download response example:
 Projects list query params:
 - `q` (optional, case-insensitive name contains search)
 - `customerId` (optional, honored only for `tiba_agent`/`tiba_admin`; forbidden for `customer_user`)
+- `page` (default `1`)
+- `pageSize` (default `20`, max `100`)
+- `sort` (`name` | `createdAt`, default `name`)
+- `order` (`asc` | `desc`, default `asc`)
+
+Customers list query params:
+- `q` (optional, case-insensitive name contains search)
 - `page` (default `1`)
 - `pageSize` (default `20`, max `100`)
 - `sort` (`name` | `createdAt`, default `name`)
