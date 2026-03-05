@@ -6,6 +6,7 @@ import { JwtStrategy } from './auth/jwt.strategy';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
 import { TenantGuard } from './auth/guards/tenant.guard';
+import { CustomersModule } from './customers/customers.module';
 import { HealthController } from './health.controller';
 import { MeController } from './me.controller';
 import { PrismaModule } from './prisma/prisma.module';
@@ -20,6 +21,7 @@ import { UsersModule } from './users/users.module';
       envFilePath: ['.env', '.env.local']
     }),
     PassportModule.register({ defaultStrategy: 'jwt' }),
+    CustomersModule,
     PrismaModule,
     ProjectsModule,
     TicketsModule,
