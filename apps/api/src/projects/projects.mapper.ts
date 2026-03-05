@@ -6,6 +6,7 @@ export function toProjectDto(project: Project): ProjectDto {
     id: project.id,
     customerId: project.customer_id,
     name: project.name,
+    isArchived: project.is_archived,
     createdAt: project.created_at,
     updatedAt: project.updated_at
   };

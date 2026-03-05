@@ -20,13 +20,14 @@ model Customer {
 }
 
 model Project {
-  id         String   @id @default(uuid()) @db.Uuid
+  id          String   @id @default(uuid()) @db.Uuid
   customer_id String   @db.Uuid
-  name       String
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
-  customer   Customer @relation(fields: [customer_id], references: [id], onDelete: Cascade)
-  tickets    Ticket[]
+  name        String
+  is_archived Boolean  @default(false)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+  customer    Customer @relation(fields: [customer_id], references: [id], onDelete: Cascade)
+  tickets     Ticket[]
 
   @@index([customer_id])
 }

@@ -2,6 +2,7 @@ export interface ProjectDto {
   id: string;
   customerId: string;
   name: string;
+  isArchived: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

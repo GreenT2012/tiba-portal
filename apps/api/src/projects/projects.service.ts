@@ -1,10 +1,12 @@
-import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { AuthUser } from '../auth/auth-user.interface';
 import { PrismaService } from '../prisma/prisma.service';
+import { CreateProjectDto } from './dto/create-project.dto';
 import { ListProjectsDto } from './dto/list-projects.dto';
+import { UpdateProjectDto } from './dto/update-project.dto';
 import { toProjectDto } from './projects.mapper';
-import { ProjectListResponseDto } from './projects.types';
+import { ProjectDto, ProjectListResponseDto } from './projects.types';
 
 @Injectable()
 export class ProjectsService {
@@ -40,6 +42,72 @@ export class ProjectsService {
     };
   }
 
+  async getProjectById(user: AuthUser, id: string): Promise<ProjectDto> {
+    const project = await this.prisma.project.findUnique({ where: { id } });
+    if (!project) {
+      throw new NotFoundException('Project not found');
+    }
+
+    if (this.isCustomerUser(user) && project.customer_id !== user.customerId) {
+      throw new ForbiddenException('Project is outside your tenant scope');
+    }
+
+    return toProjectDto(project);
+  }
+
+  async createProject(user: AuthUser, dto: CreateProjectDto): Promise<ProjectDto> {
+    this.assertInternalUser(user);
+
+    const name = dto.name?.trim();
+    if (!name) {
+      throw new BadRequestException('name is required');
+    }
+    if (!dto.customerId) {
+      throw new BadRequestException('customerId is required');
+    }
+
+    const customer = await this.prisma.customer.findUnique({ where: { id: dto.customerId } });
+    if (!customer) {
+      throw new BadRequestException('Customer not found');
+    }
+
+    const project = await this.prisma.project.create({
+      data: {
+        customer_id: dto.customerId,
+        name
+      }
+    });
+
+    return toProjectDto(project);
+  }
+
+  async updateProject(user: AuthUser, id: string, dto: UpdateProjectDto): Promise<ProjectDto> {
+    this.assertInternalUser(user);
+
+    const project = await this.prisma.project.findUnique({ where: { id } });
+    if (!project) {
+      throw new NotFoundException('Project not found');
+    }
+
+    const data: Prisma.ProjectUpdateInput = {};
+    if (dto.name !== undefined) {
+      const name = dto.name.trim();
+      if (!name) {
+        throw new BadRequestException('name must not be empty');
+      }
+      data.name = name;
+    }
+    if (dto.isArchived !== undefined) {
+      data.is_archived = dto.isArchived;
+    }
+    if (Object.keys(data).length === 0) {
+      throw new BadRequestException('At least one field must be provided');
+    }
+
+    const updated = await this.prisma.project.update({ where: { id }, data });
+    return toProjectDto(updated);
+  }
+
   private resolveCustomerScope(user: AuthUser, requestedCustomerId?: string): string | undefined {
     if (user.roles.includes('customer_user')) {
       if (!user.customerId) {
@@ -56,6 +124,19 @@ export class ProjectsService {
     }
 
     throw new ForbiddenException('Unsupported role');
+  }
+
+  private isCustomerUser(user: AuthUser) {
+    return user.roles.includes('customer_user');
+  }
+
+  private assertInternalUser(user: AuthUser) {
+    if (this.isCustomerUser(user)) {
+      throw new ForbiddenException('customer_user is not allowed');
+    }
+    if (!user.roles.includes('tiba_agent') && !user.roles.includes('tiba_admin')) {
+      throw new ForbiddenException('Unsupported role');
+    }
   }
 
   private parsePositiveInt(value: string | undefined, fallback: number, field: string): number {

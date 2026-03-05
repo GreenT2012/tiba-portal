@@ -10,6 +10,8 @@
 - `GET /me` (authenticated) -> `{ "sub": string, "roles": string[], "customerId": string | null, "email": string | null }`
 - `GET /users` (tiba roles only) -> `[{ "id", "username", "email", "firstName", "lastName" }]`
 - `GET /projects` -> `{ items, page, pageSize, total }` with camelCase project keys
+- `POST /projects` (tiba roles only) -> create project `{ customerId, name }`
+- `PATCH /projects/:id` (tiba roles only) -> update project `{ name?, isArchived? }`
 - `GET /tickets` -> `{ items, page, pageSize, total }` with camelCase ticket summary keys
 - `POST /tickets` -> returns `TicketDto` in camelCase
 - `GET /tickets/:id` -> returns `TicketDto` in camelCase
@@ -46,7 +48,11 @@ Projects list query params:
 - `order` (`asc` | `desc`, default `asc`)
 
 Projects response item example:
-- `{ "id": "...", "customerId": "...", "name": "...", "createdAt": "...", "updatedAt": "..." }`
+- `{ "id": "...", "customerId": "...", "name": "...", "isArchived": false, "createdAt": "...", "updatedAt": "..." }`
+
+Project management policy:
+- Prefer archive/unarchive via `PATCH /projects/:id` (`isArchived`) instead of hard-delete.
+- `customer_user` is forbidden from project create/update operations.
 
 Create ticket (`POST /tickets`) behavior:
 - Request body: `{ projectId, type, title, description, status?, assigneeUserId?, customerId? }`
