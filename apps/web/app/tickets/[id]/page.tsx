@@ -43,6 +43,12 @@ type SelectedFile = {
   error?: string;
 };
 
+type PreviewModalState = {
+  attachmentId: string;
+  filename: string;
+  mime: string;
+  url: string;
+};
 const MAX_ATTACHMENT_BYTES = Number(process.env.NEXT_PUBLIC_MAX_ATTACHMENT_BYTES ?? 10 * 1024 * 1024);
 
 function isAllowedMime(mime: string) {
@@ -74,6 +80,10 @@ export default function TicketDetailPage() {
   const [selectedFiles, setSelectedFiles] = useState<SelectedFile[]>([]);
   const [uploadingAttachments, setUploadingAttachments] = useState(false);
   const [attachmentsError, setAttachmentsError] = useState<string | null>(null);
+  const [downloadUrlCache, setDownloadUrlCache] = useState<Record<string, string>>({});
+  const [attachmentLoadingId, setAttachmentLoadingId] = useState<string | null>(null);
+  const [attachmentErrors, setAttachmentErrors] = useState<Record<string, string | null>>({});
+  const [previewModal, setPreviewModal] = useState<PreviewModalState | null>(null);
 
   const loadTicket = async () => {
     setLoading(true);
@@ -130,14 +140,46 @@ export default function TicketDetailPage() {
     }
   };
 
-  const downloadAttachment = async (attachmentId: string) => {
-    const response = await fetch(`/api/backend/tickets/${ticketId}/attachments/${attachmentId}/presign-download`);
-    if (!response.ok) {
-      throw new Error(await response.text());
+  const getAttachmentDownloadUrl = async (attachmentId: string): Promise<string> => {
+    const cached = downloadUrlCache[attachmentId];
+    if (cached) {
+      return cached;
     }
 
-    const data = (await response.json()) as { downloadUrl: string };
-    window.open(data.downloadUrl, '_blank', 'noopener,noreferrer');
+    setAttachmentLoadingId(attachmentId);
+    setAttachmentErrors((prev) => ({ ...prev, [attachmentId]: null }));
+
+    try {
+      const response = await fetch(`/api/backend/tickets/${ticketId}/attachments/${attachmentId}/presign-download`);
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+
+      const data = (await response.json()) as { downloadUrl: string };
+      setDownloadUrlCache((prev) => ({ ...prev, [attachmentId]: data.downloadUrl }));
+      return data.downloadUrl;
+    } catch (downloadError) {
+      const message = downloadError instanceof Error ? downloadError.message : 'Failed to load preview URL';
+      setAttachmentErrors((prev) => ({ ...prev, [attachmentId]: message }));
+      throw downloadError;
+    } finally {
+      setAttachmentLoadingId(null);
+    }
+  };
+
+  const downloadAttachment = async (attachmentId: string) => {
+    const url = await getAttachmentDownloadUrl(attachmentId);
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  const openPreview = async (attachment: TicketAttachment) => {
+    const url = await getAttachmentDownloadUrl(attachment.id);
+    setPreviewModal({
+      attachmentId: attachment.id,
+      filename: attachment.filename,
+      mime: attachment.mime,
+      url
+    });
   };
 
   const addFiles = (files: FileList | null) => {
@@ -415,20 +457,47 @@ export default function TicketDetailPage() {
             <div className="mt-3 space-y-2">
               {ticket.attachments.length === 0 && <p className="text-sm text-slate-500">No attachments yet.</p>}
               {ticket.attachments.map((attachment) => (
-                <div className="flex items-center justify-between rounded-md border border-slate-200 p-3" key={attachment.id}>
+                <div className="rounded-md border border-slate-200 p-3" key={attachment.id}>
                   <div>
                     <p className="text-sm font-medium">{attachment.filename}</p>
                     <p className="text-xs text-slate-500">
                       {attachment.mime} - {attachment.sizeBytes} bytes - {new Date(attachment.createdAt).toLocaleString()}
                     </p>
                   </div>
-                  <button
-                    className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
-                    onClick={() => void downloadAttachment(attachment.id)}
-                    type="button"
-                  >
-                    Download
-                  </button>
+
+                  {attachment.mime.startsWith('image/') && downloadUrlCache[attachment.id] ? (
+                    <button className="mt-3 block" onClick={() => void openPreview(attachment)} type="button">
+                      <img
+                        alt={attachment.filename}
+                        className="h-24 w-24 rounded border border-slate-200 object-cover"
+                        src={downloadUrlCache[attachment.id]}
+                      />
+                    </button>
+                  ) : null}
+
+                  <div className="mt-3 flex items-center gap-2">
+                    {(attachment.mime.startsWith('image/') || attachment.mime === 'application/pdf') && (
+                      <button
+                        className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+                        disabled={attachmentLoadingId === attachment.id}
+                        onClick={() => void openPreview(attachment)}
+                        type="button"
+                      >
+                        {attachmentLoadingId === attachment.id ? 'Loading preview...' : 'Preview'}
+                      </button>
+                    )}
+                    <button
+                      className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+                      disabled={attachmentLoadingId === attachment.id}
+                      onClick={() => void downloadAttachment(attachment.id)}
+                      type="button"
+                    >
+                      Download
+                    </button>
+                  </div>
+                  {attachmentErrors[attachment.id] && (
+                    <p className="mt-2 text-xs text-red-600">{attachmentErrors[attachment.id]}</p>
+                  )}
                 </div>
               ))}
             </div>
@@ -480,6 +549,31 @@ export default function TicketDetailPage() {
               </button>
             </div>
           </section>
+        </div>
+      )}
+
+      {previewModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="max-h-[90vh] w-full max-w-4xl overflow-auto rounded-md bg-white p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h4 className="text-sm font-medium">{previewModal.filename}</h4>
+              <button
+                className="rounded-md border border-slate-300 bg-white px-3 py-1 text-sm"
+                onClick={() => setPreviewModal(null)}
+                type="button"
+              >
+                Close
+              </button>
+            </div>
+
+            {previewModal.mime.startsWith('image/') ? (
+              <img alt={previewModal.filename} className="max-h-[75vh] w-full object-contain" src={previewModal.url} />
+            ) : previewModal.mime === 'application/pdf' ? (
+              <iframe className="h-[75vh] w-full rounded border border-slate-200" src={previewModal.url} title={previewModal.filename} />
+            ) : (
+              <p className="text-sm text-slate-600">Preview is not available for this file type.</p>
+            )}
+          </div>
         </div>
       )}
     </main>
