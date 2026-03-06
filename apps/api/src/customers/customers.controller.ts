@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, Req } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { AuthUser } from '../auth/auth-user.interface';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CreateCustomerDto } from './dto/create-customer.dto';
@@ -7,6 +8,7 @@ import { UpdateCustomerDto } from './dto/update-customer.dto';
 import { CustomersService } from './customers.service';
 import { CustomerDto, CustomerListResponseDto } from './customers.types';
 
+@ApiTags('admin', 'customers')
 @Roles('tiba_agent', 'tiba_admin')
 @Controller('customers')
 export class CustomersController {

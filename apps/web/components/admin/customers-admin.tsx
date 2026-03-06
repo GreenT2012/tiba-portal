@@ -1,22 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-
-type Customer = {
-  id: string;
-  name: string;
-  createdAt: string;
-  updatedAt: string;
-};
-
-type CustomersResponse = {
-  items: Customer[];
-};
-
-function getErrorMessage(status: number, body: string) {
-  const text = body.trim();
-  return `Request failed (${status}): ${text || 'No response body'}`;
-}
+import { createCustomer, listCustomers, type Customer } from '@/features/customers/api';
 
 export function CustomersAdminPage() {
   const [query, setQuery] = useState('');
@@ -40,22 +25,8 @@ export function CustomersAdminPage() {
     setError(null);
 
     try {
-      const params = new URLSearchParams({
-        q: debouncedQuery,
-        page: '1',
-        pageSize: '20',
-        sort: 'name',
-        order: 'asc'
-      });
-
-      const response = await fetch(`/api/backend/customers?${params.toString()}`, { cache: 'no-store' });
-      if (!response.ok) {
-        const body = await response.text();
-        throw new Error(getErrorMessage(response.status, body));
-      }
-
-      const data = (await response.json()) as CustomersResponse;
-      setCustomers(Array.isArray(data.items) ? data.items : []);
+      const data = await listCustomers({ q: debouncedQuery, page: 1, pageSize: 20, sort: 'name', order: 'asc' });
+      setCustomers(data.items);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Failed to load customers');
       setCustomers([]);
@@ -68,7 +39,7 @@ export function CustomersAdminPage() {
     void loadCustomers();
   }, [debouncedQuery]);
 
-  const createCustomer = async () => {
+  const onCreateCustomer = async () => {
     const trimmed = createName.trim();
     if (!trimmed) {
       setError('Customer name is required');
@@ -79,17 +50,7 @@ export function CustomersAdminPage() {
     setError(null);
 
     try {
-      const response = await fetch('/api/backend/customers', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: trimmed })
-      });
-
-      if (!response.ok) {
-        const body = await response.text();
-        throw new Error(getErrorMessage(response.status, body));
-      }
-
+      await createCustomer({ name: trimmed });
       setCreateName('');
       await loadCustomers();
     } catch (createError) {
@@ -102,8 +63,8 @@ export function CustomersAdminPage() {
   return (
     <main>
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold">TIBA Customers</h1>
-        <p className="mt-1 text-sm text-slate-600">Search and create customer tenants.</p>
+        <h1 className="text-2xl font-semibold">Admin Customers</h1>
+        <p className="mt-1 text-sm text-slate-600">Create and review customer tenants inside the Admin module.</p>
       </div>
 
       <section className="mb-6 rounded-md border border-slate-200 bg-white p-4">
@@ -118,7 +79,7 @@ export function CustomersAdminPage() {
           <button
             className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
             disabled={createLoading || !createName.trim()}
-            onClick={() => void createCustomer()}
+            onClick={() => void onCreateCustomer()}
             type="button"
           >
             {createLoading ? 'Creating...' : 'Create'}

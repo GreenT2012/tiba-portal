@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { AuthUser } from '../auth/auth-user.interface';
+import { assertInternalUser, assertTenantResourceVisible, isCustomerUser, isInternalUser } from '../auth/authz';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { ListProjectsDto } from './dto/list-projects.dto';
@@ -44,19 +45,13 @@ export class ProjectsService {
 
   async getProjectById(user: AuthUser, id: string): Promise<ProjectDto> {
     const project = await this.prisma.project.findUnique({ where: { id } });
-    if (!project) {
-      throw new NotFoundException('Project not found');
-    }
-
-    if (this.isCustomerUser(user) && project.customer_id !== user.customerId) {
-      throw new ForbiddenException('Project is outside your tenant scope');
-    }
+    assertTenantResourceVisible(user, project, 'Project');
 
     return toProjectDto(project);
   }
 
   async createProject(user: AuthUser, dto: CreateProjectDto): Promise<ProjectDto> {
-    this.assertInternalUser(user);
+    assertInternalUser(user);
 
     const name = dto.name?.trim();
     if (!name) {
@@ -111,7 +106,7 @@ export class ProjectsService {
   }
 
   async updateProject(user: AuthUser, id: string, dto: UpdateProjectDto): Promise<ProjectDto> {
-    this.assertInternalUser(user);
+    assertInternalUser(user);
 
     const project = await this.prisma.project.findUnique({ where: { id } });
     if (!project) {
@@ -138,7 +133,7 @@ export class ProjectsService {
   }
 
   private resolveCustomerScope(user: AuthUser, requestedCustomerId?: string): string | undefined {
-    if (user.roles.includes('customer_user')) {
+    if (isCustomerUser(user)) {
       if (!user.customerId) {
         throw new ForbiddenException('customer_id claim is required for customer_user');
       }
@@ -148,26 +143,12 @@ export class ProjectsService {
       return user.customerId;
     }
 
-    if (user.roles.includes('tiba_agent') || user.roles.includes('tiba_admin')) {
+    if (isInternalUser(user)) {
       return requestedCustomerId;
     }
 
     throw new ForbiddenException('Unsupported role');
   }
-
-  private isCustomerUser(user: AuthUser) {
-    return user.roles.includes('customer_user');
-  }
-
-  private assertInternalUser(user: AuthUser) {
-    if (this.isCustomerUser(user)) {
-      throw new ForbiddenException('customer_user is not allowed');
-    }
-    if (!user.roles.includes('tiba_agent') && !user.roles.includes('tiba_admin')) {
-      throw new ForbiddenException('Unsupported role');
-    }
-  }
-
   private parsePositiveInt(value: string | undefined, fallback: number, field: string): number {
     if (value === undefined) {
       return fallback;

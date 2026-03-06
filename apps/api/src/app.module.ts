@@ -5,10 +5,11 @@ import { PassportModule } from '@nestjs/passport';
 import { JwtStrategy } from './auth/jwt.strategy';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
-import { TenantGuard } from './auth/guards/tenant.guard';
 import { CustomersModule } from './customers/customers.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 import { HealthController } from './health.controller';
 import { MeController } from './me.controller';
+import { OutboxModule } from './outbox/outbox.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProjectsModule } from './projects/projects.module';
 import { TicketsModule } from './tickets/tickets.module';
@@ -22,6 +23,8 @@ import { UsersModule } from './users/users.module';
     }),
     PassportModule.register({ defaultStrategy: 'jwt' }),
     CustomersModule,
+    DashboardModule,
+    OutboxModule,
     PrismaModule,
     ProjectsModule,
     TicketsModule,
@@ -31,8 +34,7 @@ import { UsersModule } from './users/users.module';
   providers: [
     JwtStrategy,
     { provide: APP_GUARD, useClass: JwtAuthGuard },
-    { provide: APP_GUARD, useClass: RolesGuard },
-    { provide: APP_GUARD, useClass: TenantGuard }
+    { provide: APP_GUARD, useClass: RolesGuard }
   ]
 })
 export class AppModule {}

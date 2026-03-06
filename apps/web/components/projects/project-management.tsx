@@ -1,33 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-
-type Project = {
-  id: string;
-  customerId: string;
-  name: string;
-  isArchived: boolean;
-  createdAt: string;
-  updatedAt: string;
-};
-
-type CustomerOption = {
-  id: string;
-  name: string;
-};
-
-type ProjectsResponse = {
-  items: Project[];
-};
-
-type CustomersResponse = {
-  items: CustomerOption[];
-};
-
-function getErrorMessage(status: number, body: string) {
-  const text = body.trim();
-  return `Request failed (${status}): ${text || 'No response body'}`;
-}
+import { listCustomers, type Customer } from '@/features/customers/api';
+import { createProject, listProjects, updateProject, type Project } from '@/features/projects/api';
 
 export function ProjectsAdminPage() {
   const [query, setQuery] = useState('');
@@ -36,11 +11,11 @@ export function ProjectsAdminPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [selectedCustomer, setSelectedCustomer] = useState<CustomerOption | null>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false);
   const [customerQuery, setCustomerQuery] = useState('');
   const [debouncedCustomerQuery, setDebouncedCustomerQuery] = useState('');
-  const [customerOptions, setCustomerOptions] = useState<CustomerOption[]>([]);
+  const [customerOptions, setCustomerOptions] = useState<Customer[]>([]);
   const [customersLoading, setCustomersLoading] = useState(false);
   const [customersError, setCustomersError] = useState<string | null>(null);
   const [customerNameById, setCustomerNameById] = useState<Record<string, string>>({});
@@ -52,18 +27,12 @@ export function ProjectsAdminPage() {
   const [savingId, setSavingId] = useState<string | null>(null);
 
   useEffect(() => {
-    const timeout = setTimeout(() => {
-      setDebouncedQuery(query.trim());
-    }, 300);
-
+    const timeout = setTimeout(() => setDebouncedQuery(query.trim()), 300);
     return () => clearTimeout(timeout);
   }, [query]);
 
   useEffect(() => {
-    const timeout = setTimeout(() => {
-      setDebouncedCustomerQuery(customerQuery.trim());
-    }, 300);
-
+    const timeout = setTimeout(() => setDebouncedCustomerQuery(customerQuery.trim()), 300);
     return () => clearTimeout(timeout);
   }, [customerQuery]);
 
@@ -72,14 +41,8 @@ export function ProjectsAdminPage() {
     setError(null);
 
     try {
-      const params = new URLSearchParams({ q: debouncedQuery, pageSize: '100' });
-      const response = await fetch(`/api/backend/projects?${params.toString()}`, { cache: 'no-store' });
-      if (!response.ok) {
-        const body = await response.text();
-        throw new Error(getErrorMessage(response.status, body));
-      }
-      const data = (await response.json()) as ProjectsResponse;
-      setProjects(Array.isArray(data.items) ? data.items : []);
+      const data = await listProjects({ q: debouncedQuery, pageSize: 100 });
+      setProjects(data.items);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Failed to load projects');
       setProjects([]);
@@ -104,29 +67,15 @@ export function ProjectsAdminPage() {
       setCustomersError(null);
 
       try {
-        const params = new URLSearchParams({
-          q: debouncedCustomerQuery,
-          page: '1',
-          pageSize: '20',
-          sort: 'name',
-          order: 'asc'
-        });
-        const response = await fetch(`/api/backend/customers?${params.toString()}`, { cache: 'no-store' });
-        if (!response.ok) {
-          const body = await response.text();
-          throw new Error(getErrorMessage(response.status, body));
-        }
-
-        const data = (await response.json()) as CustomersResponse;
-        const items = Array.isArray(data.items) ? data.items : [];
+        const data = await listCustomers({ q: debouncedCustomerQuery, page: 1, pageSize: 20, sort: 'name', order: 'asc' });
         if (cancelled) {
           return;
         }
 
-        setCustomerOptions(items);
+        setCustomerOptions(data.items);
         setCustomerNameById((prev) => {
           const next = { ...prev };
-          for (const item of items) {
+          for (const item of data.items) {
             next[item.id] = item.name;
           }
           return next;
@@ -150,7 +99,7 @@ export function ProjectsAdminPage() {
     };
   }, [customerDropdownOpen, debouncedCustomerQuery]);
 
-  const createProject = async () => {
+  const onCreateProject = async () => {
     if (!selectedCustomer || !createName.trim()) {
       setError('Customer and project name are required');
       return;
@@ -160,17 +109,7 @@ export function ProjectsAdminPage() {
     setError(null);
 
     try {
-      const response = await fetch('/api/backend/projects', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customerId: selectedCustomer.id, name: createName.trim() })
-      });
-
-      if (!response.ok) {
-        const body = await response.text();
-        throw new Error(getErrorMessage(response.status, body));
-      }
-
+      await createProject({ customerId: selectedCustomer.id, name: createName.trim() });
       setSelectedCustomer(null);
       setCustomerQuery('');
       setCreateName('');
@@ -187,17 +126,7 @@ export function ProjectsAdminPage() {
     setError(null);
 
     try {
-      const response = await fetch(`/api/backend/projects/${project.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(patch)
-      });
-
-      if (!response.ok) {
-        const body = await response.text();
-        throw new Error(getErrorMessage(response.status, body));
-      }
-
+      await updateProject(project.id, patch);
       setEditingId(null);
       setEditingName('');
       await loadProjects();
@@ -211,8 +140,8 @@ export function ProjectsAdminPage() {
   return (
     <main>
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold">TIBA Project Admin</h1>
-        <p className="mt-1 text-sm text-slate-600">Create, rename, and archive projects.</p>
+        <h1 className="text-2xl font-semibold">Project Management</h1>
+        <p className="mt-1 text-sm text-slate-600">Manage project creation, renaming, and archiving inside the Projects module.</p>
       </div>
 
       <section className="mb-6 rounded-md border border-slate-200 bg-white p-4">
@@ -282,7 +211,7 @@ export function ProjectsAdminPage() {
           <button
             className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
             disabled={createLoading || !selectedCustomer || !createName.trim()}
-            onClick={() => void createProject()}
+            onClick={() => void onCreateProject()}
             type="button"
           >
             {createLoading ? 'Creating...' : 'Create'}
@@ -313,8 +242,7 @@ export function ProjectsAdminPage() {
                     <div>
                       <p className="text-sm font-medium text-slate-900">{project.name}</p>
                       <p className="text-xs text-slate-500">
-                        {project.id} - customer{' '}
-                        {customerNameById[project.customerId] ?? `Customer ${project.customerId.slice(0, 8)}`} -{' '}
+                        {project.id} - customer {customerNameById[project.customerId] ?? `Customer ${project.customerId.slice(0, 8)}`} -{' '}
                         {project.isArchived ? 'archived' : 'active'}
                       </p>
                     </div>
@@ -329,7 +257,7 @@ export function ProjectsAdminPage() {
                           />
                           <button
                             className="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm"
-                            disabled={savingId === project.id}
+                            disabled={savingId === project.id || !editingName.trim()}
                             onClick={() => void saveProject(project, { name: editingName.trim() })}
                             type="button"
                           >
@@ -337,6 +265,7 @@ export function ProjectsAdminPage() {
                           </button>
                           <button
                             className="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm"
+                            disabled={savingId === project.id}
                             onClick={() => {
                               setEditingId(null);
                               setEditingName('');
@@ -358,7 +287,6 @@ export function ProjectsAdminPage() {
                           Rename
                         </button>
                       )}
-
                       <button
                         className="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm"
                         disabled={savingId === project.id}

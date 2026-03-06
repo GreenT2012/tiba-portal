@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, Req } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { AuthUser } from '../auth/auth-user.interface';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { AssignTicketDto } from './dto/assign-ticket.dto';
@@ -16,6 +17,7 @@ import {
   TicketListResponseDto
 } from './tickets.types';
 
+@ApiTags('tickets')
 @Controller('tickets')
 export class TicketsController {
   constructor(private readonly ticketsService: TicketsService) {}
@@ -35,6 +37,7 @@ export class TicketsController {
     return this.ticketsService.getTicketById(req.user, id);
   }
 
+  @Roles('tiba_agent', 'tiba_admin')
   @Patch(':id/status')
   updateTicketStatus(
     @Req() req: { user: AuthUser },

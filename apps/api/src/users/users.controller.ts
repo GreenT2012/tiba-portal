@@ -7,7 +7,7 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ProvisionedUserDto, ResetPasswordResponseDto, UserDto } from './users.types';
 import { UsersService } from './users.service';
 
-@ApiTags('users')
+@ApiTags('admin', 'users')
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}

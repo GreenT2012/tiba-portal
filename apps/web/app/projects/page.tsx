@@ -1,24 +1,13 @@
 'use client';
 
 import Link from 'next/link';
+import { useSession } from 'next-auth/react';
 import { useEffect, useState } from 'react';
-
-type Project = {
-  id: string;
-  customerId: string;
-  name: string;
-  createdAt: string;
-  updatedAt: string;
-};
-
-type ProjectsResponse = {
-  items: Project[];
-  page: number;
-  pageSize: number;
-  total: number;
-};
+import { listProjects, type Project } from '@/features/projects/api';
 
 export default function ProjectsPage() {
+  const { data: session } = useSession();
+  const isInternal = Boolean(session?.roles?.includes('tiba_agent') || session?.roles?.includes('tiba_admin'));
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [projects, setProjects] = useState<Project[]>([]);
@@ -34,45 +23,48 @@ export default function ProjectsPage() {
   }, [query]);
 
   useEffect(() => {
-    const controller = new AbortController();
+    let cancelled = false;
 
     async function loadProjects() {
       setLoading(true);
       setError(null);
 
       try {
-        const params = new URLSearchParams({ q: debouncedQuery, pageSize: '50' });
-        const response = await fetch(`/api/backend/projects?${params.toString()}`, {
-          cache: 'no-store',
-          signal: controller.signal
-        });
-
-        if (!response.ok) {
-          throw new Error(await response.text());
+        const data = await listProjects({ q: debouncedQuery, pageSize: 50 });
+        if (!cancelled) {
+          setProjects(data.items);
         }
-
-        const data = (await response.json()) as ProjectsResponse;
-        setProjects(Array.isArray(data.items) ? data.items : []);
       } catch (loadError) {
-        if ((loadError as Error).name === 'AbortError') {
-          return;
+        if (!cancelled) {
+          setError(loadError instanceof Error ? loadError.message : 'Failed to load projects');
+          setProjects([]);
         }
-        setError(loadError instanceof Error ? loadError.message : 'Failed to load projects');
-        setProjects([]);
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     }
 
     void loadProjects();
 
-    return () => controller.abort();
+    return () => {
+      cancelled = true;
+    };
   }, [debouncedQuery]);
 
   return (
     <main>
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Projects</h1>
+      <div className="mb-6 flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold">Projects</h1>
+          <p className="mt-1 text-sm text-slate-600">Shared project module with role-dependent actions and project detail screens.</p>
+        </div>
+        {isInternal && (
+          <Link className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm" href="/projects/manage">
+            Manage Projects
+          </Link>
+        )}
       </div>
 
       <input

@@ -17,6 +17,7 @@ model Customer {
   ticket_comments   TicketComment[]
   ticket_attachments TicketAttachment[]
   audit_logs        AuditLog[]
+  outbox_events     OutboxEvent[]
 }
 
 model Project {
@@ -99,4 +100,24 @@ model AuditLog {
 
   @@index([customer_id, created_at])
   @@index([entity_type, entity_id, created_at])
+}
+
+model OutboxEvent {
+  id             String    @id @default(uuid()) @db.Uuid
+  topic          String
+  aggregate_type String
+  aggregate_id   String
+  customer_id    String?   @db.Uuid
+  payload_json   Json
+  status         String    @default("PENDING")
+  attempts       Int       @default(0)
+  last_error     String?
+  created_at     DateTime  @default(now())
+  published_at   DateTime?
+  next_retry_at  DateTime?
+  customer       Customer? @relation(fields: [customer_id], references: [id], onDelete: SetNull)
+
+  @@index([topic, status, created_at])
+  @@index([aggregate_type, aggregate_id, created_at])
+  @@index([customer_id, created_at])
 }

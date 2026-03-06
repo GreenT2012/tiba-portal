@@ -1,6 +1,7 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { AuthUser } from '../auth/auth-user.interface';
+import { assertInternalUser } from '../auth/authz';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { ListCustomersDto } from './dto/list-customers.dto';
@@ -13,7 +14,7 @@ export class CustomersService {
   constructor(private readonly prisma: PrismaService) {}
 
   async listCustomers(user: AuthUser, query: ListCustomersDto): Promise<CustomerListResponseDto> {
-    this.assertInternalUser(user);
+    assertInternalUser(user);
 
     const page = this.parsePositiveInt(query.page, 1, 'page');
     const pageSize = Math.min(this.parsePositiveInt(query.pageSize, 20, 'pageSize'), 100);
@@ -43,7 +44,7 @@ export class CustomersService {
   }
 
   async createCustomer(user: AuthUser, dto: CreateCustomerDto): Promise<CustomerDto> {
-    this.assertInternalUser(user);
+    assertInternalUser(user);
 
     const name = dto.name?.trim();
     if (!name) {
@@ -55,7 +56,7 @@ export class CustomersService {
   }
 
   async updateCustomer(user: AuthUser, id: string, dto: UpdateCustomerDto): Promise<CustomerDto> {
-    this.assertInternalUser(user);
+    assertInternalUser(user);
 
     const name = dto.name?.trim();
     if (!name) {
@@ -74,16 +75,6 @@ export class CustomersService {
 
     return toCustomerDto(updated);
   }
-
-  private assertInternalUser(user: AuthUser) {
-    if (user.roles.includes('customer_user')) {
-      throw new ForbiddenException('customer_user is not allowed');
-    }
-    if (!user.roles.includes('tiba_agent') && !user.roles.includes('tiba_admin')) {
-      throw new ForbiddenException('Unsupported role');
-    }
-  }
-
   private parsePositiveInt(value: string | undefined, fallback: number, field: string): number {
     if (value === undefined) {
       return fallback;

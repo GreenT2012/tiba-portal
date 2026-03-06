@@ -20,7 +20,7 @@
 - `GET /tickets` -> `{ items, page, pageSize, total }` with camelCase ticket summary keys
 - `POST /tickets` -> returns `TicketDto` in camelCase
 - `GET /tickets/:id` -> returns `TicketDto` in camelCase
-- `PATCH /tickets/:id/status` -> returns `TicketDto` in camelCase
+- `PATCH /tickets/:id/status` (tiba roles only) -> returns `TicketDto` in camelCase
 - `PATCH /tickets/:id/assign` -> returns `TicketDto` in camelCase
 - `POST /tickets/:id/comments` -> returns `TicketCommentDto` in camelCase
 - `POST /tickets/:id/attachments/presign-upload` -> returns upload URL payload (camelCase)
@@ -143,6 +143,25 @@ Keycloak admin service account configuration for `/users`:
 - All external API payloads use camelCase keys.
 - Database and Prisma fields remain snake_case; response mapping is done explicitly in the tickets module mapper.
 
+## Error Format
+
+- All API errors use a stable JSON envelope:
+- `{ "error": { "code": "BAD_REQUEST|UNAUTHORIZED|FORBIDDEN|NOT_FOUND|CONFLICT|UNPROCESSABLE_ENTITY|BAD_GATEWAY|INTERNAL_SERVER_ERROR", "message": "...", "statusCode": 400, "details": [...]? } }`
+- Tenant-fremde tenant-scoped Einzelressourcen werden als `404` behandelt, nicht als `403`.
+- The web BFF (`/api/backend/*`) preserves this envelope for upstream API errors and normalizes BFF-originated failures to the same shape.
+- Web clients should read `error.message` as the stable primary display field.
+
+## Authorization and Tenant Enforcement
+
+- Tenant enforcement is currently service-centered by design.
+- Global guards handle authentication and role metadata.
+- Service methods enforce tenant scope and resource visibility consistently for tenant-scoped entities.
+- `PATCH /tickets/:id/status` and `PATCH /tickets/:id/assign` are both TIBA-only operations.
+- Integration rule:
+  - controller: authentication + role metadata
+  - service: tenant scope + visibility checks
+  - hidden tenant-fremde Einzelressource: `404`
+
 Example ticket summary response item:
 - `{ "id": "...", "title": "...", "status": "OPEN", "type": "Bug", "projectId": "...", "customerId": "...", "assigneeUserId": null, "createdAt": "...", "updatedAt": "..." }`
 
@@ -153,7 +172,39 @@ Postman flow (attachments):
 4. Fetch ticket detail (`GET /tickets/:id`) and verify attachment metadata appears in `attachments`.
 5. Request download URL (`GET /tickets/:id/attachments/:attachmentId/presign-download`) and open the returned URL.
 
-## TODO
+## Current Integration Limits
 
-- Add customer resource endpoints
-- Add versioning and error contract documentation
+- Browser-to-API traffic is intentionally routed only through the web BFF.
+- Keycloak login/logout and MinIO object upload/download still require live external services for full end-to-end verification.
+- The standard JSON error envelope is stable at API and BFF boundaries; web pages should not parse raw upstream JSON strings directly.
+
+
+## Internal outbox
+
+Ticket write actions also persist internal outbox events (`ticket.created`, `ticket.status_changed`, `ticket.assigned`, `ticket.comment_added`, `ticket.attachment_added`) in the same database transaction.
+
+- Current outbox states:
+  - `PENDING`
+  - `PROCESSING`
+  - `PROCESSED`
+  - `FAILED`
+- `attempts` counts claim attempts
+- `last_error` stores the latest handler failure message
+- `next_retry_at` gates retryable failed events
+- `published_at` is used as the successful processing timestamp in the current MVP dispatcher
+
+This is an internal integration seam for future modules such as notifications, SLA, and reporting.
+
+Manual dispatch endpoint for MVP verification and controlled processing:
+- `POST /outbox/dispatch`
+- Roles: `tiba_admin`
+- Body: `{ "batchSize": 20 }` (optional, max 100)
+- Response: `{ "requested": 20, "claimed": 3, "processed": 2, "failed": 1, "exhausted": 0, "skipped": 0 }`
+
+Observability endpoint:
+- `GET /outbox/stats`
+- Roles: `tiba_admin`
+- Response includes `pending`, `processing`, `processed`, `failed`, `retryableFailed`, `exhaustedFailed`, and `failedByTopic`
+
+- Automatic dispatch runs inside the API process.
+- Current control env vars: `OUTBOX_AUTO_DISPATCH`, `OUTBOX_POLL_INTERVAL_MS`, `OUTBOX_DISPATCH_BATCH_SIZE`, `OUTBOX_MAX_ATTEMPTS`, `OUTBOX_RETRY_DELAY_MS`.

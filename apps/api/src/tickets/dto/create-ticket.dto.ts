@@ -1,4 +1,5 @@
 import { IsIn, IsOptional, IsString } from 'class-validator';
+import { ticketStatusValues, ticketTypeValues } from '@tiba/shared/tickets';
 
 export class CreateTicketDto {
   @IsString()
@@ -11,12 +12,12 @@ export class CreateTicketDto {
   description!: string;
 
   @IsString()
-  @IsIn(['Bug', 'Feature', 'Content', 'Marketing', 'Tracking', 'Plugin'])
+  @IsIn(ticketTypeValues)
   type!: string;
 
   @IsOptional()
   @IsString()
-  @IsIn(['OPEN', 'IN_PROGRESS', 'CLOSED'])
+  @IsIn(ticketStatusValues)
   status?: string;
 
   @IsOptional()

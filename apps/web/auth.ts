@@ -39,12 +39,26 @@ function extractRoles(claims: AccessTokenClaims | null): string[] {
   return [...new Set(resourceRoles)];
 }
 
+function requiredEnv(name: 'KEYCLOAK_ISSUER' | 'KEYCLOAK_CLIENT_ID' | 'KEYCLOAK_CLIENT_SECRET'): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`${name} is required for web authentication`);
+  }
+  return value;
+}
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
     Keycloak({
-      issuer: process.env.KEYCLOAK_ISSUER,
-      clientId: process.env.KEYCLOAK_CLIENT_ID,
-      clientSecret: process.env.KEYCLOAK_CLIENT_SECRET
+      issuer: requiredEnv('KEYCLOAK_ISSUER'),
+      clientId: requiredEnv('KEYCLOAK_CLIENT_ID'),
+      clientSecret: requiredEnv('KEYCLOAK_CLIENT_SECRET'),
+      authorization: {
+        params: {
+          prompt: 'login',
+          max_age: '0'
+        }
+      }
     })
   ],
   session: {

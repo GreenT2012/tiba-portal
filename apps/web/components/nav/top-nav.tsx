@@ -15,20 +15,11 @@ function isActive(pathname: string, href: string) {
   if (href === '/tickets') {
     return pathname === '/tickets' || pathname.startsWith('/tickets/');
   }
-  if (href === '/tickets/new') {
-    return pathname === '/tickets/new';
+  if (href === '/projects') {
+    return pathname === '/projects' || pathname.startsWith('/projects/');
   }
-  if (href === '/tiba') {
-    return pathname === '/tiba';
-  }
-  if (href === '/tiba/projects') {
-    return pathname === '/tiba/projects';
-  }
-  if (href === '/tiba/customers') {
-    return pathname === '/tiba/customers';
-  }
-  if (href === '/tiba/users') {
-    return pathname === '/tiba/users';
+  if (href === '/admin') {
+    return pathname === '/admin' || pathname.startsWith('/admin/');
   }
   return pathname === href;
 }
@@ -48,7 +39,7 @@ function roleLabel(roles: string[]) {
 
 export function TopNav({ email, roles }: TopNavProps) {
   const pathname = usePathname();
-  const isTiba = roles.includes('tiba_agent') || roles.includes('tiba_admin');
+  const isInternal = roles.includes('tiba_agent') || roles.includes('tiba_admin');
 
   const baseClass = 'rounded-md px-3 py-2 text-sm';
   const activeClass = 'bg-slate-900 text-white';
@@ -67,36 +58,13 @@ export function TopNav({ email, roles }: TopNavProps) {
           <Link className={`${baseClass} ${isActive(pathname, '/tickets') ? activeClass : inactiveClass}`} href="/tickets">
             Tickets
           </Link>
-          <Link
-            className={`${baseClass} ${isActive(pathname, '/tickets/new') ? activeClass : inactiveClass}`}
-            href="/tickets/new"
-          >
-            New Ticket
+          <Link className={`${baseClass} ${isActive(pathname, '/projects') ? activeClass : inactiveClass}`} href="/projects">
+            Projects
           </Link>
-          {isTiba && (
-            <>
-              <Link className={`${baseClass} ${isActive(pathname, '/tiba') ? activeClass : inactiveClass}`} href="/tiba">
-                TIBA Board
-              </Link>
-              <Link
-                className={`${baseClass} ${isActive(pathname, '/tiba/projects') ? activeClass : inactiveClass}`}
-                href="/tiba/projects"
-              >
-                TIBA Projects
-              </Link>
-              <Link
-                className={`${baseClass} ${isActive(pathname, '/tiba/customers') ? activeClass : inactiveClass}`}
-                href="/tiba/customers"
-              >
-                TIBA Customers
-              </Link>
-              <Link
-                className={`${baseClass} ${isActive(pathname, '/tiba/users') ? activeClass : inactiveClass}`}
-                href="/tiba/users"
-              >
-                TIBA Users
-              </Link>
-            </>
+          {isInternal && (
+            <Link className={`${baseClass} ${isActive(pathname, '/admin') ? activeClass : inactiveClass}`} href="/admin">
+              Admin
+            </Link>
           )}
         </nav>
 

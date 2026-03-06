@@ -1,6 +1,10 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { AuditService } from '../audit/audit.service';
+import { OutboxService } from '../outbox/outbox.service';
 import { TicketsService } from './tickets.service';
+import { TicketAssigneeService } from './ticket-assignee.service';
+import { TicketAttachmentsService } from './ticket-attachments.service';
+import { TicketEventsService } from './ticket-events.service';
 
 function makePrismaMock() {
   const tx = {
@@ -15,6 +19,9 @@ function makePrismaMock() {
       create: jest.fn()
     },
     auditLog: {
+      create: jest.fn()
+    },
+    outboxEvent: {
       create: jest.fn()
     }
   };
@@ -38,6 +45,9 @@ function makePrismaMock() {
     },
     ticketAttachment: {
       findFirst: jest.fn()
+    },
+    outboxEvent: {
+      create: jest.fn()
     }
   };
 
@@ -54,14 +64,30 @@ function makeStorageMock() {
   };
 }
 
-describe('TicketsService audit logging', () => {
+function makeService(prisma: any, storage?: ReturnType<typeof makeStorageMock>) {
+  const effectiveStorage = storage ?? makeStorageMock();
+  const auditService = new AuditService(prisma as any);
+  const outboxService = new OutboxService(prisma as any);
+  const ticketAttachmentsService = new TicketAttachmentsService(effectiveStorage as any);
+  const ticketAssigneeService = new TicketAssigneeService();
+  const ticketEventsService = new TicketEventsService(outboxService);
+
+  return new TicketsService(
+    prisma as any,
+    auditService,
+    ticketAttachmentsService,
+    ticketAssigneeService,
+    ticketEventsService
+  );
+}
+
+describe('TicketsService modular flows', () => {
   it('filters ticket list by projectId', async () => {
     const { prisma } = makePrismaMock();
-    const storage = makeStorageMock();
     prisma.ticket.findMany.mockResolvedValue([]);
     prisma.ticket.count.mockResolvedValue(0);
 
-    const service = new TicketsService(prisma as any, new AuditService(prisma as any), storage as any);
+    const service = makeService(prisma);
 
     await service.listTickets(
       { sub: 'u1', roles: ['customer_user'], customerId: 'c1', email: null },
@@ -78,9 +104,8 @@ describe('TicketsService audit logging', () => {
     );
   });
 
-  it('writes created audit event on createTicket', async () => {
+  it('writes audit and outbox event on createTicket', async () => {
     const { prisma, tx } = makePrismaMock();
-    const storage = makeStorageMock();
     prisma.project.findFirst.mockResolvedValue({ id: 'p1', customer_id: 'c1' });
     tx.ticket.create.mockResolvedValue({
       id: 't1',
@@ -98,7 +123,7 @@ describe('TicketsService audit logging', () => {
       attachments: []
     });
 
-    const service = new TicketsService(prisma as any, new AuditService(prisma as any), storage as any);
+    const service = makeService(prisma);
 
     await service.createTicket(
       { sub: 'u1', roles: ['customer_user'], customerId: 'c1', email: null },
@@ -118,11 +143,22 @@ describe('TicketsService audit logging', () => {
         })
       })
     );
+    expect(tx.outboxEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          topic: 'ticket.created',
+          aggregate_type: 'ticket',
+          aggregate_id: 't1',
+          customer_id: 'c1',
+          status: 'PENDING',
+          payload_json: { ticketId: 't1', customerId: 'c1', projectId: 'p1', type: 'Bug', status: 'OPEN', assigneeUserId: null }
+        })
+      })
+    );
   });
 
   it('allows tiba_agent create with assignee and derives customer from project', async () => {
     const { prisma, tx } = makePrismaMock();
-    const storage = makeStorageMock();
     prisma.project.findFirst.mockResolvedValue({ id: 'p2', customer_id: 'c2' });
     tx.ticket.create.mockResolvedValue({
       id: 't2',
@@ -140,7 +176,7 @@ describe('TicketsService audit logging', () => {
       attachments: []
     });
 
-    const service = new TicketsService(prisma as any, new AuditService(prisma as any), storage as any);
+    const service = makeService(prisma);
 
     const result = await service.createTicket(
       { sub: 'a1', roles: ['tiba_agent'], customerId: null, email: null },
@@ -163,19 +199,18 @@ describe('TicketsService audit logging', () => {
       })
     );
     expect(result.customerId).toBe('c2');
-    expect(tx.auditLog.create).toHaveBeenCalledWith(
+    expect(tx.outboxEvent.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          action: 'created',
-          meta_json: expect.objectContaining({ assigneeUserId: 'agent-2' })
+          topic: 'ticket.created',
+          payload_json: expect.objectContaining({ assigneeUserId: 'agent-2' })
         })
       })
     );
   });
 
-  it('writes status_changed audit event on updateTicketStatus', async () => {
+  it('writes status_changed audit and outbox event on updateTicketStatus', async () => {
     const { prisma, tx } = makePrismaMock();
-    const storage = makeStorageMock();
     prisma.ticket.findUnique.mockResolvedValue({ id: 't1', customer_id: 'c1', status: 'OPEN' });
     tx.ticket.update.mockResolvedValue({
       id: 't1',
@@ -193,10 +228,10 @@ describe('TicketsService audit logging', () => {
       attachments: []
     });
 
-    const service = new TicketsService(prisma as any, new AuditService(prisma as any), storage as any);
+    const service = makeService(prisma);
 
     await service.updateTicketStatus(
-      { sub: 'u1', roles: ['customer_user'], customerId: 'c1', email: null },
+      { sub: 'a1', roles: ['tiba_agent'], customerId: null, email: null },
       't1',
       { status: 'IN_PROGRESS' }
     );
@@ -209,11 +244,50 @@ describe('TicketsService audit logging', () => {
         })
       })
     );
+    expect(tx.outboxEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          topic: 'ticket.status_changed',
+          payload_json: { ticketId: 't1', customerId: 'c1', from: 'OPEN', to: 'IN_PROGRESS' }
+        })
+      })
+    );
   });
 
-  it('writes assigned audit event on assignTicket', async () => {
+  it('forbids customer_user from updating ticket status', async () => {
+    const { prisma } = makePrismaMock();
+    const service = makeService(prisma);
+
+    await expect(
+      service.updateTicketStatus(
+        { sub: 'u1', roles: ['customer_user'], customerId: 'c1', email: null },
+        't1',
+        { status: 'IN_PROGRESS' }
+      )
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('returns not found for customer_user on cross-tenant ticket detail', async () => {
+    const { prisma } = makePrismaMock();
+    prisma.ticket.findUnique.mockResolvedValue({
+      id: 't1',
+      customer_id: 'c2',
+      comments: [],
+      attachments: []
+    });
+
+    const service = makeService(prisma);
+
+    await expect(
+      service.getTicketById(
+        { sub: 'u1', roles: ['customer_user'], customerId: 'c1', email: null },
+        't1'
+      )
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('writes assigned audit and outbox event on assignTicket', async () => {
     const { prisma, tx } = makePrismaMock();
-    const storage = makeStorageMock();
     prisma.ticket.findUnique.mockResolvedValue({
       id: 't1',
       customer_id: 'c1',
@@ -235,7 +309,7 @@ describe('TicketsService audit logging', () => {
       attachments: []
     });
 
-    const service = new TicketsService(prisma as any, new AuditService(prisma as any), storage as any);
+    const service = makeService(prisma);
 
     await service.assignTicket(
       { sub: 'a1', roles: ['tiba_agent'], customerId: null, email: null },
@@ -252,11 +326,18 @@ describe('TicketsService audit logging', () => {
         })
       })
     );
+    expect(tx.outboxEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          topic: 'ticket.assigned',
+          payload_json: { ticketId: 't1', customerId: 'c1', from: null, to: 'agent-1' }
+        })
+      })
+    );
   });
 
-  it('writes comment_added audit event on addComment', async () => {
+  it('writes comment_added audit and outbox event on addComment', async () => {
     const { prisma, tx } = makePrismaMock();
-    const storage = makeStorageMock();
     prisma.ticket.findUnique.mockResolvedValue({ id: 't1', customer_id: 'c1' });
     tx.ticketComment.create.mockResolvedValue({
       id: 'cm1',
@@ -268,7 +349,7 @@ describe('TicketsService audit logging', () => {
     });
     tx.ticket.update.mockResolvedValue({});
 
-    const service = new TicketsService(prisma as any, new AuditService(prisma as any), storage as any);
+    const service = makeService(prisma);
 
     await service.addComment(
       { sub: 'u1', roles: ['customer_user'], customerId: 'c1', email: null },
@@ -284,12 +365,34 @@ describe('TicketsService audit logging', () => {
         })
       })
     );
+    expect(tx.outboxEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          topic: 'ticket.comment_added',
+          payload_json: { ticketId: 't1', customerId: 'c1', commentId: 'cm1' }
+        })
+      })
+    );
+  });
+
+  it('returns not found for customer_user adding comment to cross-tenant ticket', async () => {
+    const { prisma } = makePrismaMock();
+    prisma.ticket.findUnique.mockResolvedValue({ id: 't1', customer_id: 'c2' });
+
+    const service = makeService(prisma);
+
+    await expect(
+      service.addComment(
+        { sub: 'u1', roles: ['customer_user'], customerId: 'c1', email: null },
+        't1',
+        { body: 'hello' }
+      )
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('rejects disallowed mime when presigning upload', async () => {
     const { prisma } = makePrismaMock();
-    const storage = makeStorageMock();
-    const service = new TicketsService(prisma as any, new AuditService(prisma as any), storage as any);
+    const service = makeService(prisma);
 
     await expect(
       service.presignAttachmentUpload(
@@ -302,8 +405,7 @@ describe('TicketsService audit logging', () => {
 
   it('rejects too-large attachment when presigning upload', async () => {
     const { prisma } = makePrismaMock();
-    const storage = makeStorageMock();
-    const service = new TicketsService(prisma as any, new AuditService(prisma as any), storage as any);
+    const service = makeService(prisma);
 
     await expect(
       service.presignAttachmentUpload(
@@ -314,14 +416,13 @@ describe('TicketsService audit logging', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('creates attachment record and returns camelCase upload response', async () => {
+  it('creates attachment record and returns camelCase upload response plus outbox event', async () => {
     const { prisma, tx } = makePrismaMock();
-    const storage = makeStorageMock();
     prisma.ticket.findUnique.mockResolvedValue({ id: 't1', customer_id: 'c1' });
     tx.ticketAttachment.create.mockResolvedValue({ id: 'a1' });
     tx.ticket.update.mockResolvedValue({});
 
-    const service = new TicketsService(prisma as any, new AuditService(prisma as any), storage as any);
+    const service = makeService(prisma);
 
     const result = await service.presignAttachmentUpload(
       { sub: 'u1', roles: ['customer_user'], customerId: 'c1', email: null },
@@ -341,5 +442,34 @@ describe('TicketsService audit logging', () => {
         data: expect.objectContaining({ action: 'attachment_added' })
       })
     );
+    expect(tx.outboxEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          topic: 'ticket.attachment_added',
+          payload_json: expect.objectContaining({
+            ticketId: 't1',
+            customerId: 'c1',
+            filename: 'My_File.pdf',
+            mime: 'application/pdf',
+            sizeBytes: 1024
+          })
+        })
+      })
+    );
+  });
+
+  it('returns not found for customer_user presign upload on cross-tenant ticket', async () => {
+    const { prisma } = makePrismaMock();
+    prisma.ticket.findUnique.mockResolvedValue({ id: 't1', customer_id: 'c2' });
+
+    const service = makeService(prisma);
+
+    await expect(
+      service.presignAttachmentUpload(
+        { sub: 'u1', roles: ['customer_user'], customerId: 'c1', email: null },
+        't1',
+        { filename: 'test.pdf', mime: 'application/pdf', sizeBytes: 1024 }
+      )
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 });

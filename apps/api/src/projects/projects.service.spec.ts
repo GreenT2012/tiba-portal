@@ -1,4 +1,4 @@
-import { ForbiddenException } from '@nestjs/common';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { ProjectsService } from './projects.service';
 
 function makePrismaMock() {
@@ -191,5 +191,25 @@ describe('ProjectsService', () => {
       data: { name: 'Alpha Renamed', is_archived: true }
     });
     expect(result).toMatchObject({ id: 'p1', name: 'Alpha Renamed', isArchived: true });
+  });
+
+  it('returns not found for customer_user on cross-tenant project detail', async () => {
+    const prisma = makePrismaMock();
+    const service = new ProjectsService(prisma as any);
+    prisma.project.findUnique.mockResolvedValue({
+      id: 'p1',
+      customer_id: 'c2',
+      name: 'Alpha',
+      is_archived: false,
+      created_at: new Date('2026-01-01T00:00:00.000Z'),
+      updated_at: new Date('2026-01-02T00:00:00.000Z')
+    });
+
+    await expect(
+      service.getProjectById(
+        { sub: 'u1', roles: ['customer_user'], customerId: 'c1', email: 'u1@example.com' },
+        'p1'
+      )
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 });

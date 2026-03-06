@@ -2,16 +2,19 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
-  NotFoundException,
-  Optional
+  NotFoundException
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
+import { ticketStatusValues, type TicketStatus, type TicketType } from '@tiba/shared/tickets';
 import { AuditService } from '../audit/audit.service';
 import { AuthUser } from '../auth/auth-user.interface';
+import { assertInternalUser, assertTenantResourceVisible, isCustomerUser, isInternalUser } from '../auth/authz';
 import { PrismaService } from '../prisma/prisma.service';
-import { StorageService } from '../storage/storage.service';
-import { UsersService } from '../users/users.service';
 import { toTicketCommentDto, toTicketDto, toTicketSummaryDto } from './tickets.mapper';
+import { TicketAssigneeService } from './ticket-assignee.service';
+import { TicketAttachmentsService } from './ticket-attachments.service';
+import { TicketEventsService } from './ticket-events.service';
+import { buildTicketListQueryPlan } from './ticket-query.builder';
 import { AssignTicketDto } from './dto/assign-ticket.dto';
 import { CreateTicketCommentDto } from './dto/create-ticket-comment.dto';
 import { CreateTicketDto } from './dto/create-ticket.dto';
@@ -26,66 +29,33 @@ import {
   TicketListResponseDto
 } from './tickets.types';
 
-const STATUSES = ['OPEN', 'IN_PROGRESS', 'CLOSED'] as const;
-const DEFAULT_MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
-
 @Injectable()
 export class TicketsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
-    private readonly storageService: StorageService,
-    @Optional() private readonly usersService?: UsersService
+    private readonly ticketAttachmentsService: TicketAttachmentsService,
+    private readonly ticketAssigneeService: TicketAssigneeService,
+    private readonly ticketEventsService: TicketEventsService
   ) {}
 
   async listTickets(user: AuthUser, query: ListTicketsDto): Promise<TicketListResponseDto> {
-    if (this.isCustomerUser(user) && query.customerId) {
-      throw new ForbiddenException('customerId is not allowed for customer_user');
-    }
-
-    const where: any = {};
-    const customerId = this.isCustomerUser(user) ? user.customerId : query.customerId;
-    if (this.isCustomerUser(user) && !customerId) {
-      throw new ForbiddenException('customer_id claim is required for customer_user');
-    }
-    if (customerId) where.customer_id = customerId;
-    if (query.projectId) where.project_id = query.projectId;
-
-    if (query.view === 'new') {
-      where.status = 'OPEN';
-      where.assignee_user_id = null;
-    }
-    if (query.view === 'open') {
-      where.status = { in: ['OPEN', 'IN_PROGRESS'] };
-    }
-    if (query.view === 'my') {
-      where.assignee_user_id = user.sub;
-      where.status = { not: 'CLOSED' };
-    }
-
-    if (query.status) where.status = query.status;
-    if (query.assignee === 'me') where.assignee_user_id = user.sub;
-    if (query.assignee === 'unassigned') where.assignee_user_id = null;
-
-    const page = Math.max(Number(query.page ?? 1), 1);
-    const pageSize = Math.min(Math.max(Number(query.pageSize ?? 20), 1), 100);
-    const orderByField = query.sort === 'createdAt' ? 'created_at' : 'updated_at';
-    const orderByDirection = query.order === 'asc' ? 'asc' : 'desc';
+    const plan = buildTicketListQueryPlan(user, query);
 
     const [items, total] = await this.prisma.$transaction([
       this.prisma.ticket.findMany({
-        where,
-        orderBy: { [orderByField]: orderByDirection },
-        skip: (page - 1) * pageSize,
-        take: pageSize
+        where: plan.where,
+        orderBy: { [plan.orderByField]: plan.orderByDirection },
+        skip: (plan.page - 1) * plan.pageSize,
+        take: plan.pageSize
       }),
-      this.prisma.ticket.count({ where })
+      this.prisma.ticket.count({ where: plan.where })
     ]);
 
     return {
       items: items.map(toTicketSummaryDto),
-      page,
-      pageSize,
+      page: plan.page,
+      pageSize: plan.pageSize,
       total
     };
   }
@@ -93,7 +63,7 @@ export class TicketsService {
   async createTicket(user: AuthUser, dto: CreateTicketDto): Promise<TicketDto> {
     const status = dto.status ?? 'OPEN';
 
-    if (!STATUSES.includes(status as (typeof STATUSES)[number])) {
+    if (!ticketStatusValues.includes(status as (typeof ticketStatusValues)[number])) {
       throw new BadRequestException('status must be one of: OPEN, IN_PROGRESS, CLOSED');
     }
 
@@ -103,7 +73,7 @@ export class TicketsService {
       throw new BadRequestException('Project not found');
     }
 
-    if (this.isCustomerUser(user)) {
+    if (isCustomerUser(user)) {
       if (!user.customerId) {
         throw new ForbiddenException('customer_id claim is required for customer_user');
       }
@@ -116,7 +86,7 @@ export class TicketsService {
       if (project.customer_id !== user.customerId) {
         throw new BadRequestException('Project not found for customer');
       }
-    } else if (this.isInternalUser(user)) {
+    } else if (isInternalUser(user)) {
       if (dto.customerId && dto.customerId !== project.customer_id) {
         throw new BadRequestException('customerId does not match project customer');
       }
@@ -162,6 +132,21 @@ export class TicketsService {
         tx as Pick<PrismaService, 'auditLog'>
       );
 
+      await this.ticketEventsService.publish(
+        {
+          topic: 'ticket.created',
+          payload: {
+            ticketId: created.id,
+            customerId: created.customer_id,
+            projectId: created.project_id,
+            type: created.type as TicketType,
+            status: created.status as TicketStatus,
+            assigneeUserId: created.assignee_user_id
+          }
+        },
+        tx as Pick<PrismaService, 'outboxEvent'>
+      );
+
       return created;
     });
 
@@ -177,27 +162,19 @@ export class TicketsService {
       }
     });
 
-    this.assertTicketVisible(user, ticket);
-    const dto = toTicketDto(ticket as any);
-
-    if (dto.assigneeUserId && this.usersService) {
-      try {
-        dto.assignee = await this.usersService.getUserById(dto.assigneeUserId);
-      } catch {
-        dto.assignee = null;
-      }
-    }
-
-    return dto;
+    assertTenantResourceVisible(user, ticket, 'Ticket');
+    return this.ticketAssigneeService.enrich(toTicketDto(ticket as any));
   }
 
   async updateTicketStatus(user: AuthUser, id: string, dto: UpdateTicketStatusDto): Promise<TicketDto> {
-    if (!STATUSES.includes(dto.status as (typeof STATUSES)[number])) {
+    assertInternalUser(user);
+
+    if (!ticketStatusValues.includes(dto.status as (typeof ticketStatusValues)[number])) {
       throw new BadRequestException('status must be one of: OPEN, IN_PROGRESS, CLOSED');
     }
 
     const existing = await this.prisma.ticket.findUnique({ where: { id } });
-    this.assertTicketVisible(user, existing);
+    assertTenantResourceVisible(user, existing, 'Ticket');
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const next = await tx.ticket.update({
@@ -219,6 +196,19 @@ export class TicketsService {
         tx as Pick<PrismaService, 'auditLog'>
       );
 
+      await this.ticketEventsService.publish(
+        {
+          topic: 'ticket.status_changed',
+          payload: {
+            ticketId: next.id,
+            customerId: next.customer_id,
+            from: existing.status as TicketStatus,
+            to: next.status as TicketStatus
+          }
+        },
+        tx as Pick<PrismaService, 'outboxEvent'>
+      );
+
       return next;
     });
 
@@ -226,12 +216,10 @@ export class TicketsService {
   }
 
   async assignTicket(user: AuthUser, id: string, dto: AssignTicketDto): Promise<TicketDto> {
-    if (!this.isInternalUser(user)) {
-      throw new ForbiddenException('Only tiba_agent/tiba_admin can assign tickets');
-    }
+    assertInternalUser(user);
 
     const existing = await this.prisma.ticket.findUnique({ where: { id } });
-    this.assertTicketVisible(user, existing);
+    assertTenantResourceVisible(user, existing, 'Ticket');
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const next = await tx.ticket.update({
@@ -253,6 +241,19 @@ export class TicketsService {
         tx as Pick<PrismaService, 'auditLog'>
       );
 
+      await this.ticketEventsService.publish(
+        {
+          topic: 'ticket.assigned',
+          payload: {
+            ticketId: next.id,
+            customerId: next.customer_id,
+            from: existing.assignee_user_id ?? null,
+            to: next.assignee_user_id ?? null
+          }
+        },
+        tx as Pick<PrismaService, 'outboxEvent'>
+      );
+
       return next;
     });
 
@@ -265,7 +266,7 @@ export class TicketsService {
     }
 
     const ticket = await this.prisma.ticket.findUnique({ where: { id } });
-    this.assertTicketVisible(user, ticket);
+    assertTenantResourceVisible(user, ticket, 'Ticket');
 
     const comment = await this.prisma.$transaction(async (tx) => {
       const created = await tx.ticketComment.create({
@@ -295,6 +296,18 @@ export class TicketsService {
         tx as Pick<PrismaService, 'auditLog'>
       );
 
+      await this.ticketEventsService.publish(
+        {
+          topic: 'ticket.comment_added',
+          payload: {
+            ticketId: ticket.id,
+            customerId: ticket.customer_id,
+            commentId: created.id
+          }
+        },
+        tx as Pick<PrismaService, 'outboxEvent'>
+      );
+
       return created;
     });
 
@@ -306,14 +319,18 @@ export class TicketsService {
     ticketId: string,
     dto: PresignUploadAttachmentDto
   ): Promise<PresignUploadAttachmentResponseDto> {
-    this.validateAttachmentInput(dto);
+    this.ticketAttachmentsService.validateInput(dto);
 
     const ticket = await this.prisma.ticket.findUnique({ where: { id: ticketId } });
-    this.assertTicketVisible(user, ticket);
+    assertTenantResourceVisible(user, ticket, 'Ticket');
 
     const attachmentId = randomUUID();
-    const safeFilename = this.sanitizeFilename(dto.filename);
-    const objectKey = this.storageService.createObjectKey(ticket.customer_id, ticket.id, attachmentId, safeFilename);
+    const { safeFilename, objectKey } = this.ticketAttachmentsService.createObjectKey(
+      ticket.customer_id,
+      ticket.id,
+      attachmentId,
+      dto.filename
+    );
 
     await this.prisma.$transaction(async (tx) => {
       await tx.ticketAttachment.create({
@@ -351,18 +368,24 @@ export class TicketsService {
         },
         tx as Pick<PrismaService, 'auditLog'>
       );
+
+      await this.ticketEventsService.publish(
+        {
+          topic: 'ticket.attachment_added',
+          payload: {
+            ticketId: ticket.id,
+            customerId: ticket.customer_id,
+            attachmentId,
+            filename: safeFilename,
+            mime: dto.mime,
+            sizeBytes: dto.sizeBytes
+          }
+        },
+        tx as Pick<PrismaService, 'outboxEvent'>
+      );
     });
 
-    const uploadUrl = await this.storageService.getPresignedUploadUrl(objectKey, dto.mime);
-
-    return {
-      attachmentId,
-      objectKey,
-      uploadUrl,
-      requiredHeaders: {
-        'Content-Type': dto.mime
-      }
-    };
+    return this.ticketAttachmentsService.buildPresignedUploadResponse(objectKey, dto.mime, attachmentId);
   }
 
   async presignAttachmentDownload(
@@ -371,7 +394,7 @@ export class TicketsService {
     attachmentId: string
   ): Promise<PresignDownloadAttachmentResponseDto> {
     const ticket = await this.prisma.ticket.findUnique({ where: { id: ticketId } });
-    this.assertTicketVisible(user, ticket);
+    assertTenantResourceVisible(user, ticket, 'Ticket');
 
     const attachment = await this.prisma.ticketAttachment.findFirst({
       where: {
@@ -384,61 +407,7 @@ export class TicketsService {
       throw new NotFoundException('Attachment not found');
     }
 
-    const downloadUrl = await this.storageService.getPresignedDownloadUrl(attachment.object_key);
+    const downloadUrl = await this.ticketAttachmentsService.getDownloadUrl(attachment.object_key);
     return { downloadUrl };
-  }
-
-  private assertTicketVisible<T extends { id: string; customer_id: string }>(
-    user: AuthUser,
-    ticket: T | null
-  ): asserts ticket is T {
-    if (!ticket) {
-      throw new NotFoundException('Ticket not found');
-    }
-
-    if (this.isCustomerUser(user) && ticket.customer_id !== user.customerId) {
-      throw new NotFoundException('Ticket not found');
-    }
-  }
-
-  private isCustomerUser(user: AuthUser) {
-    return user.roles.includes('customer_user');
-  }
-
-  private isInternalUser(user: AuthUser) {
-    return user.roles.includes('tiba_agent') || user.roles.includes('tiba_admin');
-  }
-
-  private validateAttachmentInput(dto: PresignUploadAttachmentDto) {
-    if (!dto.filename || dto.filename.trim().length === 0) {
-      throw new BadRequestException('filename is required');
-    }
-    if (!dto.mime || dto.mime.trim().length === 0) {
-      throw new BadRequestException('mime is required');
-    }
-    if (!this.isAllowedMime(dto.mime)) {
-      throw new BadRequestException('mime must be application/pdf or image/*');
-    }
-    if (!Number.isFinite(dto.sizeBytes) || dto.sizeBytes <= 0) {
-      throw new BadRequestException('sizeBytes must be a positive number');
-    }
-    const maxBytes = this.getMaxAttachmentBytes();
-    if (dto.sizeBytes > maxBytes) {
-      throw new BadRequestException(`sizeBytes exceeds max allowed (${maxBytes})`);
-    }
-    // TODO: add content sniffing beyond mime value in later iteration.
-  }
-
-  private isAllowedMime(mime: string) {
-    return mime === 'application/pdf' || mime.startsWith('image/');
-  }
-
-  private getMaxAttachmentBytes() {
-    const raw = Number(process.env.MAX_ATTACHMENT_BYTES ?? DEFAULT_MAX_ATTACHMENT_BYTES);
-    return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_MAX_ATTACHMENT_BYTES;
-  }
-
-  private sanitizeFilename(filename: string) {
-    return filename.replace(/[^\w.\-]/g, '_').replace(/^_+/, '').slice(0, 255) || 'attachment';
   }
 }

@@ -7,6 +7,9 @@ import { useSession } from 'next-auth/react';
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { AssigneeSelect } from '@/components/users/assignee-select';
+import { listCustomers, type Customer } from '@/features/customers/api';
+import { listProjects, type Project } from '@/features/projects/api';
+import { createTicket, presignTicketAttachmentUpload } from '@/features/tickets/api';
 import { z } from 'zod';
 
 const ticketSchema = z.object({
@@ -28,17 +31,8 @@ type SelectedFile = {
   error?: string;
 };
 
-type ProjectOption = {
-  id: string;
-  name: string;
-  customerId: string;
-  isArchived?: boolean;
-};
-
-type CustomerOption = {
-  id: string;
-  name: string;
-};
+type ProjectOption = Project;
+type CustomerOption = Customer;
 
 const MAX_ATTACHMENT_BYTES = Number(process.env.NEXT_PUBLIC_MAX_ATTACHMENT_BYTES ?? 10 * 1024 * 1024);
 
@@ -113,28 +107,19 @@ export default function NewTicketPage() {
       return;
     }
 
-    const controller = new AbortController();
-
     async function loadCustomers() {
       setCustomersLoading(true);
       setCustomersError(null);
 
       try {
-        const params = new URLSearchParams({
+        const data = await listCustomers({
           q: debouncedCustomerQuery,
-          page: '1',
-          pageSize: '20',
+          page: 1,
+          pageSize: 20,
           sort: 'name',
           order: 'asc'
         });
-
-        const response = await fetch(`/api/backend/customers?${params.toString()}`, { signal: controller.signal });
-        if (!response.ok) {
-          throw new Error('Failed to load customers');
-        }
-
-        const data = (await response.json()) as { items?: CustomerOption[] };
-        const items = Array.isArray(data.items) ? data.items : [];
+        const items = data.items;
         setCustomerOptions(items);
         setCustomerNameById((prev) => {
           const next = { ...prev };
@@ -155,8 +140,6 @@ export default function NewTicketPage() {
     }
 
     void loadCustomers();
-
-    return () => controller.abort();
   }, [debouncedCustomerQuery, customerDropdownOpen, isTibaUser]);
 
   useEffect(() => {
@@ -164,43 +147,22 @@ export default function NewTicketPage() {
       return;
     }
 
-    const controller = new AbortController();
-
     async function loadProjects() {
       setProjectsLoading(true);
       setProjectsError(null);
 
       try {
-        const params = new URLSearchParams({
+        const data = await listProjects({
           q: debouncedProjectQuery,
-          page: '1',
-          pageSize: '20',
+          page: 1,
+          pageSize: 20,
           sort: 'name',
-          order: 'asc'
+          order: 'asc',
+          ...(isTibaUser && selectedCustomer?.id ? { customerId: selectedCustomer.id } : {})
         });
-
-        if (isTibaUser && selectedCustomer?.id) {
-          params.set('customerId', selectedCustomer.id);
-        }
-
-        const response = await fetch(`/api/backend/projects?${params.toString()}`, { signal: controller.signal });
-        if (!response.ok) {
-          throw new Error('Failed to load projects');
-        }
-
-        const data = (await response.json()) as {
-          items?: Array<{ id: string; name: string; customerId: string; isArchived?: boolean }>;
-        };
-        const items = Array.isArray(data.items) ? data.items : [];
+        const items = data.items;
         const visibleItems = isTibaUser ? items : items.filter((project) => !project.isArchived);
-        setProjectOptions(
-          visibleItems.map((project) => ({
-            id: project.id,
-            name: project.name,
-            customerId: project.customerId,
-            isArchived: project.isArchived
-          }))
-        );
+        setProjectOptions(visibleItems);
       } catch (error) {
         if ((error as Error).name === 'AbortError') {
           return;
@@ -213,8 +175,6 @@ export default function NewTicketPage() {
     }
 
     void loadProjects();
-
-    return () => controller.abort();
   }, [debouncedProjectQuery, isTibaUser, projectDropdownOpen, selectedCustomer?.id]);
 
   const customerLabel = (customerId: string) => customerNameById[customerId] ?? `Customer ${customerId.slice(0, 8)}`;
@@ -273,18 +233,7 @@ export default function NewTicketPage() {
     try {
       let ticketId = createdTicketId;
       if (!ticketId) {
-        const createRes = await fetch('/api/backend/tickets', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(values)
-        });
-
-        if (!createRes.ok) {
-          const message = await createRes.text();
-          throw new Error(message || 'Failed to create ticket');
-        }
-
-        const ticket = (await createRes.json()) as { id: string };
+        const ticket = await createTicket(values);
         ticketId = ticket.id;
         setCreatedTicketId(ticketId);
       }
@@ -299,25 +248,11 @@ export default function NewTicketPage() {
         setFileState(fileEntry.id, 'uploading');
 
         try {
-          const presignRes = await fetch(`/api/backend/tickets/${ticketId}/attachments/presign-upload`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              filename: fileEntry.file.name,
-              mime: fileEntry.file.type,
-              sizeBytes: fileEntry.file.size
-            })
+          const presign = await presignTicketAttachmentUpload(ticketId, {
+            filename: fileEntry.file.name,
+            mime: fileEntry.file.type,
+            sizeBytes: fileEntry.file.size
           });
-
-          if (!presignRes.ok) {
-            const message = await presignRes.text();
-            throw new Error(message || 'Failed to presign upload');
-          }
-
-          const presign = (await presignRes.json()) as {
-            uploadUrl: string;
-            requiredHeaders?: { 'Content-Type'?: string };
-          };
 
           const uploadRes = await fetch(presign.uploadUrl, {
             method: 'PUT',

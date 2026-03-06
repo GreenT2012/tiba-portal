@@ -1,16 +1,21 @@
 import { getToken } from 'next-auth/jwt';
 import { NextRequest, NextResponse } from 'next/server';
+import { buildApiErrorEnvelope } from '@/lib/api';
+import { normalizeProxyResponse } from '@/lib/bff';
 
 async function proxy(request: NextRequest, path: string[]) {
   try {
     const backendBaseUrl = process.env.BACKEND_BASE_URL;
     if (!backendBaseUrl) {
-      return NextResponse.json({ error: 'BACKEND_BASE_URL is not configured' }, { status: 500 });
+      return NextResponse.json(
+        buildApiErrorEnvelope(500, 'BACKEND_BASE_URL is not configured'),
+        { status: 500 }
+      );
     }
 
     const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
     if (!token?.accessToken || typeof token.accessToken !== 'string') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json(buildApiErrorEnvelope(401, 'Unauthorized'), { status: 401 });
     }
 
     const baseUrl = backendBaseUrl.replace(/\/$/, '');
@@ -43,25 +48,24 @@ async function proxy(request: NextRequest, path: string[]) {
       console.error(`[BFF] Upstream body: ${snippet}`);
     }
 
-    if (responseType.includes('application/json')) {
-      try {
-        const parsed = raw ? JSON.parse(raw) : {};
-        return NextResponse.json(parsed, { status: upstream.status });
-      } catch {
-        return new NextResponse(raw, {
-          status: upstream.status,
-          headers: { 'content-type': 'text/plain; charset=utf-8' }
-        });
-      }
+    const normalized = normalizeProxyResponse({
+      status: upstream.status,
+      contentType: responseType,
+      raw,
+      statusText: upstream.statusText
+    });
+
+    if (normalized.kind === 'json') {
+      return NextResponse.json(normalized.body, { status: normalized.status });
     }
 
     const passthroughHeaders = new Headers();
-    if (responseType) {
-      passthroughHeaders.set('content-type', responseType);
+    if (normalized.contentType) {
+      passthroughHeaders.set('content-type', normalized.contentType);
     }
 
-    return new NextResponse(raw, {
-      status: upstream.status,
+    return new NextResponse(normalized.body, {
+      status: normalized.status,
       headers: passthroughHeaders
     });
   } catch (error) {
@@ -69,7 +73,10 @@ async function proxy(request: NextRequest, path: string[]) {
     if (process.env.NODE_ENV === 'development') {
       console.error('[BFF] Proxy failure', error);
     }
-    return NextResponse.json({ error: 'BFF proxy failed', detail: message }, { status: 500 });
+    return NextResponse.json(
+      buildApiErrorEnvelope(500, 'BFF proxy failed', { detail: message }),
+      { status: 500 }
+    );
   }
 }
 

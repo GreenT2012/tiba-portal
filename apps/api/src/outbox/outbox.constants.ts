@@ -1,0 +1,1 @@
+export const OUTBOX_EVENT_HANDLERS = Symbol('OUTBOX_EVENT_HANDLERS');
