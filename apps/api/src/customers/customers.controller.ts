@@ -8,7 +8,7 @@ import { UpdateCustomerDto } from './dto/update-customer.dto';
 import { CustomersService } from './customers.service';
 import { CustomerDto, CustomerListResponseDto } from './customers.types';
 
-@ApiTags('customers')
+@ApiTags('admin', 'customers')
 @Roles('tiba_agent', 'tiba_admin')
 @Controller('customers')
 export class CustomersController {

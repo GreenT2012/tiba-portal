@@ -181,4 +181,30 @@ Postman flow (attachments):
 
 ## Internal outbox
 
-Ticket write actions also persist internal outbox events (`ticket.created`, `ticket.status_changed`, `ticket.assigned`, `ticket.comment_added`, `ticket.attachment_added`) in the same database transaction. This is an internal integration seam for future modules such as notifications, SLA, and reporting; it is not an external HTTP API.
+Ticket write actions also persist internal outbox events (`ticket.created`, `ticket.status_changed`, `ticket.assigned`, `ticket.comment_added`, `ticket.attachment_added`) in the same database transaction.
+
+- Current outbox states:
+  - `PENDING`
+  - `PROCESSING`
+  - `PROCESSED`
+  - `FAILED`
+- `attempts` counts claim attempts
+- `last_error` stores the latest handler failure message
+- `next_retry_at` gates retryable failed events
+- `published_at` is used as the successful processing timestamp in the current MVP dispatcher
+
+This is an internal integration seam for future modules such as notifications, SLA, and reporting.
+
+Manual dispatch endpoint for MVP verification and controlled processing:
+- `POST /outbox/dispatch`
+- Roles: `tiba_admin`
+- Body: `{ "batchSize": 20 }` (optional, max 100)
+- Response: `{ "requested": 20, "claimed": 3, "processed": 2, "failed": 1, "exhausted": 0, "skipped": 0 }`
+
+Observability endpoint:
+- `GET /outbox/stats`
+- Roles: `tiba_admin`
+- Response includes `pending`, `processing`, `processed`, `failed`, `retryableFailed`, `exhaustedFailed`, and `failedByTopic`
+
+- Automatic dispatch runs inside the API process.
+- Current control env vars: `OUTBOX_AUTO_DISPATCH`, `OUTBOX_POLL_INTERVAL_MS`, `OUTBOX_DISPATCH_BATCH_SIZE`, `OUTBOX_MAX_ATTEMPTS`, `OUTBOX_RETRY_DELAY_MS`.

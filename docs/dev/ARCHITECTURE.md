@@ -100,7 +100,17 @@ Current ticket lifecycle topics:
 - `ticket.comment_added`
 - `ticket.attachment_added`
 
+Current processing model:
+- entries are created as `PENDING`
+- dispatcher claims them as `PROCESSING`
+- successful handlers mark them `PROCESSED`
+- failed handlers mark them `FAILED`
+- `attempts`, `last_error`, and `next_retry_at` make retry behavior nachvollziehbar
+- permanently failed events remain `FAILED` once `attempts >= OUTBOX_MAX_ATTEMPTS`
+
 Künftige additive Module wie notifications, SLA, reports oder webhooks sollen an dieser Outbox-Naht andocken statt direkte Calls in Ticket-Write-Flows einzubauen.
+
+Automatic dispatching runs inside the API process via `OutboxRunnerService`. The current MVP keeps this intentionally simple: one in-process polling loop, one dispatcher, and topic-based handlers.
 
 See [ADR 0003 - Ticket Lifecycle Outbox](./ADR/0003-ticket-lifecycle-outbox.md).
 
@@ -134,3 +144,16 @@ Current direction:
 - `features/users/api.ts`
 
 Pages may still orchestrate UI state, but they should no longer own backend URLs and response parsing directly when a reusable domain helper exists.
+
+
+## Dashboard as Aggregator
+
+- `Dashboard` is the global entry screen, not a separate business module.
+- The backend overview endpoint aggregates compact counts from `Tickets`, `Projects`, and `Admin` without owning domain-specific business logic.
+- This keeps module ownership in the source modules while giving the web app one stable entry contract for role-based dashboard cards.
+
+## Admin module boundary
+
+- `customers` and `users` remain separate backend modules for implementation clarity.
+- At product level they belong to the single module `Admin`.
+- Swagger and documentation group them under `admin`, while routes stay stable as `/customers` and `/users`.

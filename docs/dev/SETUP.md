@@ -25,6 +25,12 @@
       - Enable service accounts.
       - Grant realm-management roles: `view-users`, `manage-users`, `view-realm`, `manage-realm`.
       - Set `KEYCLOAK_ADMIN_CLIENT_ID=api-admin` and `KEYCLOAK_ADMIN_CLIENT_SECRET` in `apps/api/.env`.
+   - Outbox runtime defaults for MVP:
+      - `OUTBOX_AUTO_DISPATCH=true`
+      - `OUTBOX_POLL_INTERVAL_MS=5000`
+      - `OUTBOX_DISPATCH_BATCH_SIZE=20`
+      - `OUTBOX_MAX_ATTEMPTS=5`
+      - `OUTBOX_RETRY_DELAY_MS=30000`
 2. Start infrastructure:
    - `docker compose up -d`
    - `pnpm -C apps/api prisma:migrate`
@@ -50,6 +56,8 @@
   - `http://localhost:3000/api/auth/session`
   - `http://localhost:3001/api/v1/health`
   - `http://localhost:3001/api/docs`
+  - `POST http://localhost:3001/api/v1/outbox/dispatch`
+  - `GET http://localhost:3001/api/v1/outbox/stats`
 
 ## Migration Troubleshooting
 

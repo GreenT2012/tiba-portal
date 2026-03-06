@@ -63,8 +63,8 @@ export function CustomersAdminPage() {
   return (
     <main>
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold">TIBA Customers</h1>
-        <p className="mt-1 text-sm text-slate-600">Search and create customer tenants.</p>
+        <h1 className="text-2xl font-semibold">Admin Customers</h1>
+        <p className="mt-1 text-sm text-slate-600">Create and review customer tenants inside the Admin module.</p>
       </div>
 
       <section className="mb-6 rounded-md border border-slate-200 bg-white p-4">

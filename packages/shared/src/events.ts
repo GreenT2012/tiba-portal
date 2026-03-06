@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { ticketStatusSchema, ticketTypeSchema } from './tickets';
 
-export const outboxStatusSchema = z.enum(['PENDING', 'PUBLISHED', 'FAILED']);
+export const outboxStatusSchema = z.enum(['PENDING', 'PROCESSING', 'PROCESSED', 'FAILED']);
 export type OutboxStatus = z.infer<typeof outboxStatusSchema>;
 
 export const ticketEventTopicSchema = z.enum([
@@ -83,7 +83,10 @@ export const outboxEventSchema = z.object({
   customerId: z.string().uuid().nullable(),
   payload: z.unknown(),
   status: outboxStatusSchema,
+  attempts: z.number().int().nonnegative(),
+  lastError: z.string().nullable(),
   createdAt: z.coerce.date(),
-  publishedAt: z.coerce.date().nullable()
+  publishedAt: z.coerce.date().nullable(),
+  nextRetryAt: z.coerce.date().nullable()
 });
 export type OutboxEventContract = z.infer<typeof outboxEventSchema>;

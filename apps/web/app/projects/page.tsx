@@ -1,10 +1,13 @@
 'use client';
 
 import Link from 'next/link';
+import { useSession } from 'next-auth/react';
 import { useEffect, useState } from 'react';
 import { listProjects, type Project } from '@/features/projects/api';
 
 export default function ProjectsPage() {
+  const { data: session } = useSession();
+  const isInternal = Boolean(session?.roles?.includes('tiba_agent') || session?.roles?.includes('tiba_admin'));
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [projects, setProjects] = useState<Project[]>([]);
@@ -52,8 +55,16 @@ export default function ProjectsPage() {
 
   return (
     <main>
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Projects</h1>
+      <div className="mb-6 flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold">Projects</h1>
+          <p className="mt-1 text-sm text-slate-600">Shared project module with role-dependent actions and project detail screens.</p>
+        </div>
+        {isInternal && (
+          <Link className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm" href="/projects/manage">
+            Manage Projects
+          </Link>
+        )}
       </div>
 
       <input

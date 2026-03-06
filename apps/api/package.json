@@ -3,10 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "prebuild": "prisma generate",
+    "prebuild": "rm -rf dist && prisma generate",
     "build": "nest build",
-    "start": "node dist/main",
-    "start:dev": "nest start --watch",
+    "start": "node dist/apps/api/src/main",
+    "start:dev": "node --watch --require ts-node/register --require tsconfig-paths/register src/main.ts",
     "lint": "eslint \"src/**/*.ts\" --max-warnings=0",
     "pretest": "prisma generate",
     "test": "jest --passWithNoTests",

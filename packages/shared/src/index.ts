@@ -1,5 +1,7 @@
+export * from './admin';
 export * from './auth';
 export * from './customers';
+export * from './dashboard';
 export * from './errors';
 export * from './events';
 export * from './pagination';

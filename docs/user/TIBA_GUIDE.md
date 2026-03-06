@@ -2,69 +2,65 @@
 
 ## Purpose
 
-This guide will document internal support and operations workflows.
+This guide documents internal support and administration workflows.
 
 ## Navigation
 
-After login, use the top navigation:
-- `Dashboard` as the main operational overview and entry point.
-- `Tickets` for triage and ticket operations.
-- `New Ticket` for manual ticket creation.
+After login, use the product modules in the top navigation:
+- `Dashboard` as the operational entry and overview screen, including compact module counts and direct queue shortcuts.
+- `Tickets` for queue views, triage, assignment, status work, and ticket detail screens.
+- `Projects` for shared project views and project management flows.
+- `Admin` for customer and user administration.
 - `Logout` to trigger SSO logout via `/logout`.
 
-Hinweis:
+Important structure rule:
 
-- Diese Navigation beschreibt den aktuellen Implementierungsstand.
-- Das Zielbild ist:
-  - Dashboard als Haupteinstieg
-  - Queue-/Board-Logik innerhalb von Dashboard und `Tickets`
-  - `Admin` als Rahmen für `Customers` und `Users`
+- `New Ticket` is a screen and flow inside `Tickets`, not its own module.
+- The former `/tiba` board path is only a transitional route; operational queue logic belongs to `Tickets` and summary shortcuts belong to `Dashboard`.
 
-## TIBA Board
+## Dashboard
 
-Open `/tiba` to use operational triage tabs:
-- `New`: unassigned incoming tickets (`view=new`).
-- `Open`: active work queue (`view=open`).
-- `My`: tickets assigned to your user (`view=my`).
-- `Closed`: resolved items (`status=CLOSED`).
+Use `Dashboard` as the main entry for internal work:
+- jump into `New`, `Open`, or `My` ticket views
+- open `Projects`
+- open `Admin` for customer and user management
 
-Board actions:
-- `Assign to me` in `New` assigns the ticket to your current user.
-- In `Open`/`My`, change status inline (`OPEN`, `IN_PROGRESS`, `CLOSED`).
-- Click a ticket title to open detail view at `/tickets/[id]`.
+## Tickets Module
 
-Zielbild:
+Use `Tickets` for operational ticket work:
+- `New`: unassigned incoming tickets
+- `Open`: active work queue
+- `My`: tickets assigned to your current user
+- `Closed`: resolved items
 
-- Diese Logik bleibt fachlich relevant, aber nicht als eigener dauerhafter Produktbereich.
-- Die bisherigen Board-Ansichten sollen später in Dashboard-Kacheln und Ticket-Listenansichten überführt werden.
+Key flows inside `Tickets`:
+- assign ticket to yourself
+- change ticket status
+- open ticket detail
+- create ticket manually when needed
 
-## Project Admin
+## Projects Module
 
-Open `/tiba/projects` to manage customer projects:
-- Create projects by selecting a customer and entering a project name.
-- Rename existing projects.
-- Archive/unarchive projects without deleting history.
+Use `Projects` for shared project work:
+- browse project list and project detail screens
+- internal users can open project management flows via `/projects/manage`
+- create, rename, archive, and unarchive projects inside the `Projects` module
 
-## User Management
+## Admin Module
 
-Open `/tiba/users` to manage Keycloak users from the portal:
-- Search users by username/email.
-- Create users with roles (`customer_user`, `tiba_agent`, `tiba_admin`).
-- For `customer_user`, assign a tenant via `customer_id` attribute (`customerId` in UI/API).
-- Set a temporary password for selected users.
+Use `Admin` for administrative flows:
+- `Customers`: create and review tenants
+- `Users`: search users, provision users, assign roles, and reset passwords
 
 ## Rollenhinweis
 
-- `tiba_agent` arbeitet operativ cross-tenant an Tickets, Kunden und Projekten.
-- `tiba_admin` hat zusätzlich die administrativen Benutzer-Flows für Provisionierung und Passwort-Reset.
+- `tiba_agent` works cross-tenant on tickets, projects, and customer administration.
+- `tiba_admin` additionally manages user provisioning and password reset flows.
 
 ## Planned Flows
 
-- Access internal dashboard
-- Triage and assign tickets
-- Update customer-facing status and SLAs
-- Export audit logs and activity views
-
-## TODO
-
-- Add role-specific workflows for support/admin/engineering
+- access dashboard and jump into the right module
+- triage and assign tickets
+- update ticket status and communicate through ticket detail
+- manage projects and customer tenants
+- manage users without the Keycloak admin console

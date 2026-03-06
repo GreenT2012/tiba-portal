@@ -1,32 +1,26 @@
 import { auth } from '@/auth';
+import { DashboardOverview } from '@/components/dashboard/dashboard-overview';
 import Link from 'next/link';
 
 export default async function DashboardPage() {
   const session = await auth();
+  const roles = session?.roles ?? [];
 
   return (
     <main>
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Dashboard</h1>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold">Dashboard</h1>
+          <p className="mt-1 text-sm text-slate-600">
+            Global module entry with role-based overview data and direct paths into `Tickets`, `Projects`, and `Admin`.
+          </p>
+        </div>
         <Link className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm" href="/logout">
           Logout (SSO)
         </Link>
       </div>
 
-      <p className="mt-2 text-slate-600">Authenticated user context:</p>
-
-      <pre className="mt-4 overflow-auto rounded-md border border-slate-200 bg-white p-4 text-sm text-slate-700">
-        {JSON.stringify(
-          {
-            sub: session?.user?.sub ?? null,
-            email: session?.user?.email ?? null,
-            roles: session?.roles ?? [],
-            customerId: session?.customerId ?? null
-          },
-          null,
-          2
-        )}
-      </pre>
+      <DashboardOverview roles={roles} />
     </main>
   );
 }

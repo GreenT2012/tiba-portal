@@ -110,8 +110,11 @@ model OutboxEvent {
   customer_id    String?   @db.Uuid
   payload_json   Json
   status         String    @default("PENDING")
+  attempts       Int       @default(0)
+  last_error     String?
   created_at     DateTime  @default(now())
   published_at   DateTime?
+  next_retry_at  DateTime?
   customer       Customer? @relation(fields: [customer_id], references: [id], onDelete: SetNull)
 
   @@index([topic, status, created_at])

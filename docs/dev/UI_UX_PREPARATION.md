@@ -4,7 +4,7 @@
 
 Empfehlung: `beibehalten, aber strukturell neu ordnen`.
 
-Die Produktbasis kann für den UI/UX-Track genutzt werden. Die bestehende fachliche Modellierung (`Tickets`, `Projects`, `Customers`, `Users`) ist tragfähig. Die aktuelle Seiten- und Navigationsstruktur ist aber noch nicht das Zielbild.
+Die Produktbasis kann für den UI/UX-Track genutzt werden. Die bestehende fachliche Modellierung (`Tickets`, `Projects`, `Customers`, `Users`) ist tragfähig. Die aktuelle Seiten- und Navigationsstruktur wurde bereits in Richtung Zielbild bereinigt, bleibt aber in Teilen noch eine Übergangsstruktur.
 
 Verbindliche Zielentscheidung:
 
@@ -19,27 +19,24 @@ Verbindliche Zielentscheidung:
 
 Der aktuelle Web-Stand zeigt:
 
-- `/dashboard` ist vorhanden, aber derzeit nur Session-/Debug-Ausgabe.
-- Die Primärnavigation ist aktuell:
+- `/dashboard` ist als globaler Einstieg vorhanden und zeigt inzwischen modulbezogene Kacheln und kompakte Overview-Daten.
+- Die Primärnavigation ist aktuell modulzentriert:
   - `Dashboard`
   - `Tickets`
-  - `New Ticket`
-  - für TIBA zusätzlich:
-    - `TIBA Board`
-    - `TIBA Projects`
-    - `TIBA Customers`
-    - `TIBA Users`
-- `/tiba` enthält operative Ticket-Views (`new`, `open`, `my`, `closed`) und Schnellaktionen.
-- `/projects` und `/projects/[id]` sind bereits gemeinsame Bereiche.
-- `/tiba/projects`, `/tiba/customers`, `/tiba/users` sind reine Verwaltungsseiten.
+  - `Projects`
+  - für interne Rollen zusätzlich `Admin`
+- `/tickets` bündelt für interne Rollen die operative Queue-Logik (`new`, `open`, `my`, `closed`).
+- `/projects` und `/projects/[id]` sind gemeinsame Bereiche; `/projects/manage` enthält interne Projektverwaltungs-Flows.
+- `/admin/customers` und `/admin/users` bündeln die administrativen Screens.
+- Alte `/tiba*`-Pfade bestehen nur noch als Übergangs-Redirects.
 
 Bewertung:
 
 - fachlich tragfähig
 - strukturell noch zu technisch
 - Navigation für TIBA aktuell zu breit und zu speziell
-- `New Ticket` ist eher Aktion als Navigationsbereich
-- `TIBA Board` ist fachlich eine Queue-/Arbeitslogik, kein dauerhafter Top-Level-Bereich
+- `Create Ticket` ist fachlich eine Aktion bzw. ein Screen innerhalb des Moduls `Tickets`
+- die frühere `TIBA Board`-Logik ist eine Queue-/Arbeitslogik innerhalb von `Tickets`, kein dauerhafter Top-Level-Bereich
 
 ## Verbindliche Ziel-Informationsarchitektur
 

@@ -47,20 +47,13 @@ type UserItem = {
   lastName: string | null;
 };
 
-type BoardTab = 'new' | 'open' | 'my' | 'closed';
+type TicketQueueView = 'new' | 'open' | 'my' | 'closed';
 
 type StatusFilter = 'ALL' | 'OPEN' | 'IN_PROGRESS' | 'CLOSED';
 
-type TypeFilter =
-  | 'ALL'
-  | 'Bug'
-  | 'Feature'
-  | 'Content'
-  | 'Marketing'
-  | 'Tracking'
-  | 'Plugin';
+type TypeFilter = 'ALL' | 'Bug' | 'Feature' | 'Content' | 'Marketing' | 'Tracking' | 'Plugin';
 
-const TABS: Array<{ key: BoardTab; label: string }> = [
+const VIEWS: Array<{ key: TicketQueueView; label: string }> = [
   { key: 'new', label: 'New' },
   { key: 'open', label: 'Open' },
   { key: 'my', label: 'My' },
@@ -69,11 +62,11 @@ const TABS: Array<{ key: BoardTab; label: string }> = [
 
 const TYPE_OPTIONS: TypeFilter[] = ['ALL', 'Bug', 'Feature', 'Content', 'Marketing', 'Tracking', 'Plugin'];
 
-function queryForTab(tab: BoardTab): string {
-  if (tab === 'closed') {
+function queryForView(view: TicketQueueView): string {
+  if (view === 'closed') {
     return 'status=CLOSED';
   }
-  return `view=${tab}`;
+  return `view=${view}`;
 }
 
 function shortAssignee(assigneeUserId: string | null, currentUserSub: string): string {
@@ -108,8 +101,8 @@ function assigneeForDisplay(
   return shortAssignee(ticket.assigneeUserId, currentUserSub);
 }
 
-export function TibaBoard({ currentUserSub }: { currentUserSub: string }) {
-  const [activeTab, setActiveTab] = useState<BoardTab>('new');
+export function InternalTicketQueue({ currentUserSub, initialView = 'open' }: { currentUserSub: string; initialView?: TicketQueueView }) {
+  const [activeView, setActiveView] = useState<TicketQueueView>(initialView);
   const [tickets, setTickets] = useState<TicketSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -122,12 +115,16 @@ export function TibaBoard({ currentUserSub }: { currentUserSub: string }) {
   const [customerNameById, setCustomerNameById] = useState<Record<string, string>>({});
   const [userDisplayById, setUserDisplayById] = useState<Record<string, string>>({});
 
+  useEffect(() => {
+    setActiveView(initialView);
+  }, [initialView]);
+
   const loadTickets = async () => {
     setLoading(true);
     setError(null);
 
     try {
-      const response = await fetch(`/api/backend/tickets?${queryForTab(activeTab)}`, { cache: 'no-store' });
+      const response = await fetch(`/api/backend/tickets?${queryForView(activeView)}`, { cache: 'no-store' });
       if (!response.ok) {
         throw new Error(await readApiError(response, 'Failed to load tickets'));
       }
@@ -144,7 +141,7 @@ export function TibaBoard({ currentUserSub }: { currentUserSub: string }) {
 
   useEffect(() => {
     void loadTickets();
-  }, [activeTab]);
+  }, [activeView]);
 
   useEffect(() => {
     const run = async () => {
@@ -262,28 +259,33 @@ export function TibaBoard({ currentUserSub }: { currentUserSub: string }) {
   };
 
   return (
-    <main>
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold">TIBA Board</h1>
-        <p className="mt-1 text-sm text-slate-600">Operational triage views for internal support roles.</p>
-        <div className="mt-3">
-          <Link className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm" href="/tiba/projects">
+    <div>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold">Tickets</h1>
+          <p className="mt-1 text-sm text-slate-600">Internal queue views and ticket operations for support roles.</p>
+        </div>
+        <div className="flex gap-2">
+          <Link className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm" href="/tickets/new">
+            New Ticket
+          </Link>
+          <Link className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm" href="/projects/manage">
             Manage Projects
           </Link>
         </div>
       </div>
 
       <div className="mb-4 flex flex-wrap gap-2">
-        {TABS.map((tab) => (
+        {VIEWS.map((view) => (
           <button
             className={`rounded-md px-3 py-2 text-sm ${
-              activeTab === tab.key ? 'bg-slate-900 text-white' : 'border border-slate-300 bg-white text-slate-700'
+              activeView === view.key ? 'bg-slate-900 text-white' : 'border border-slate-300 bg-white text-slate-700'
             }`}
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
+            key={view.key}
+            onClick={() => setActiveView(view.key)}
             type="button"
           >
-            {tab.label}
+            {view.label}
           </button>
         ))}
       </div>
@@ -361,7 +363,7 @@ export function TibaBoard({ currentUserSub }: { currentUserSub: string }) {
                   <td className="px-3 py-2">{assigneeForDisplay(ticket, currentUserSub, userDisplayById)}</td>
                   <td className="px-3 py-2">{projectLabel(ticket.projectId)}</td>
                   <td className="px-3 py-2">
-                    {activeTab === 'new' ? (
+                    {activeView === 'new' ? (
                       <button
                         className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs"
                         disabled={assigningId === ticket.id || ticket.assigneeUserId === currentUserSub}
@@ -370,7 +372,7 @@ export function TibaBoard({ currentUserSub }: { currentUserSub: string }) {
                       >
                         {assigningId === ticket.id ? 'Assigning...' : 'Assign to me'}
                       </button>
-                    ) : activeTab === 'open' || activeTab === 'my' ? (
+                    ) : activeView === 'open' || activeView === 'my' ? (
                       <select
                         className="rounded-md border border-slate-300 px-2 py-1 text-xs"
                         disabled={statusUpdatingId === ticket.id}
@@ -400,6 +402,6 @@ export function TibaBoard({ currentUserSub }: { currentUserSub: string }) {
           </table>
         </div>
       )}
-    </main>
+    </div>
   );
 }

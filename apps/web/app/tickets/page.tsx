@@ -1,37 +1,47 @@
 'use client';
 
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { InternalTicketQueue } from '@/components/tickets/internal-ticket-queue';
 import { AssigneeOption, assigneeDisplayLabel } from '@/components/users/assignee-select';
-import { listCustomers } from '@/features/customers/api';
-import { listProjects } from '@/features/projects/api';
+import { listProjects, type Project } from '@/features/projects/api';
 import { listTickets, type TicketSummary } from '@/features/tickets/api';
-import { listUsers } from '@/features/users/api';
 
 function shortId(id: string) {
   return id.slice(0, 8);
 }
 
-function userDisplay(user: { id: string; username: string | null; email: string | null; firstName: string | null; lastName: string | null }) {
-  const fullName = `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim();
-  if (fullName) {
-    return fullName;
+function queueViewFromSearch(view: string | null, status: string | null): 'new' | 'open' | 'my' | 'closed' {
+  if (view === 'new' || view === 'open' || view === 'my' || view === 'closed') {
+    return view;
   }
-  return user.username || user.email || shortId(user.id);
+  if (status === 'CLOSED') {
+    return 'closed';
+  }
+  return 'open';
 }
 
 export default function TicketsPage() {
-  const { data: session } = useSession();
-  const isTiba = Boolean(session?.roles?.includes('tiba_agent') || session?.roles?.includes('tiba_admin'));
+  const { data: session, status } = useSession();
+  const searchParams = useSearchParams();
+  const isInternal = Boolean(session?.roles?.includes('tiba_agent') || session?.roles?.includes('tiba_admin'));
+  const initialView = useMemo(
+    () => queueViewFromSearch(searchParams.get('view'), searchParams.get('status')),
+    [searchParams]
+  );
+
   const [items, setItems] = useState<TicketSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [projectById, setProjectById] = useState<Record<string, { name: string; customerId: string }>>({});
-  const [customerNameById, setCustomerNameById] = useState<Record<string, string>>({});
-  const [userDisplayById, setUserDisplayById] = useState<Record<string, string>>({});
+  const [projectById, setProjectById] = useState<Record<string, Project>>({});
 
   useEffect(() => {
+    if (status !== 'authenticated' || isInternal) {
+      return;
+    }
+
     const run = async () => {
       try {
         const [tickets, projects] = await Promise.all([
@@ -40,21 +50,7 @@ export default function TicketsPage() {
         ]);
 
         setItems(tickets.items);
-        setProjectById(
-          Object.fromEntries(projects.items.map((project) => [project.id, { name: project.name, customerId: project.customerId }]))
-        );
-
-        if (!isTiba) {
-          return;
-        }
-
-        const [customers, users] = await Promise.all([
-          listCustomers({ page: 1, pageSize: 200, sort: 'name', order: 'asc' }),
-          listUsers({ limit: 50 })
-        ]);
-
-        setCustomerNameById(Object.fromEntries(customers.items.map((customer) => [customer.id, customer.name])));
-        setUserDisplayById(Object.fromEntries(users.map((user) => [user.id, userDisplay(user)])));
+        setProjectById(Object.fromEntries(projects.items.map((project) => [project.id, project])));
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to load tickets');
       } finally {
@@ -63,18 +59,22 @@ export default function TicketsPage() {
     };
 
     void run();
-  }, [isTiba]);
+  }, [isInternal, status]);
+
+  if (status === 'loading') {
+    return <main><p className="text-slate-600">Loading tickets...</p></main>;
+  }
+
+  if (isInternal) {
+    return <InternalTicketQueue currentUserSub={session?.user?.sub ?? ''} initialView={initialView} />;
+  }
 
   const projectLabel = (projectId: string) => {
     const project = projectById[projectId];
     if (!project) {
       return shortId(projectId);
     }
-    if (!isTiba) {
-      return project.name;
-    }
-    const customerName = customerNameById[project.customerId] ?? `Customer ${shortId(project.customerId)}`;
-    return `${customerName} • ${project.name}`;
+    return project.name;
   };
 
   const assigneeLabel = (ticket: TicketSummary & { assignee?: AssigneeOption | null }) => {
@@ -84,21 +84,18 @@ export default function TicketsPage() {
     if (ticket.assignee) {
       return assigneeDisplayLabel(ticket.assignee);
     }
-    if (userDisplayById[ticket.assigneeUserId]) {
-      return userDisplayById[ticket.assigneeUserId];
-    }
-    if (!isTiba) {
-      return 'Assigned';
-    }
-    return shortId(ticket.assigneeUserId);
+    return 'Assigned';
   };
 
   return (
     <main>
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Tickets</h1>
+        <div>
+          <h1 className="text-2xl font-semibold">Tickets</h1>
+          <p className="mt-1 text-sm text-slate-600">View and manage your tickets inside the Tickets module.</p>
+        </div>
         <Link className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm" href="/tickets/new">
-          New Ticket
+          Create Ticket
         </Link>
       </div>
 

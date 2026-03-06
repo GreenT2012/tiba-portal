@@ -2,7 +2,11 @@
 
 ## Unreleased
 
+- Add a dashboard overview API and shared contracts for module-level counts, making `Dashboard` a functional entry point across `Tickets`, `Projects`, and `Admin`.
+- Reorganize web routing, navigation, and documentation around the canonical product modules `Dashboard`, `Tickets`, `Projects`, and `Admin`, while keeping legacy `/tiba*` paths as transitional redirects.
+- Add automatic in-process outbox polling, retry windows with `maxAttempts`, failed backlog stats, and admin observability/dispatch endpoints for MVP outbox operations.
 - Add a persisted ticket lifecycle outbox seam plus internal ticket sub-services and shared domain-sliced contracts to reduce feature coupling across API, shared, and web layers.
+- Add an MVP outbox dispatcher with explicit processing states, handler registry, manual dispatch endpoint, and regression tests for status transitions and failure handling.
 - Add modularity review documentation covering current coupling hotspots, extension strategy, and the architectural path for additive modules such as notifications.
 - Bootstrap monorepo with API, web app, shared package, infra, CI, and docs skeleton.
 - Add initial Prisma domain schema and baseline migration for customers, projects, tickets, comments, attachments, and audit logs.

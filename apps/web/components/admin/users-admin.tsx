@@ -201,8 +201,8 @@ export function UsersAdminPage({ canManageUsers }: { canManageUsers: boolean }) 
   return (
     <main>
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold">TIBA Users</h1>
-        <p className="mt-1 text-sm text-slate-600">Search, provision, and reset user passwords without Keycloak console access.</p>
+        <h1 className="text-2xl font-semibold">Admin Users</h1>
+        <p className="mt-1 text-sm text-slate-600">Search, provision, and reset users inside the Admin module without Keycloak console access.</p>
       </div>
 
       <section className="mb-6 rounded-md border border-slate-200 bg-white p-4">

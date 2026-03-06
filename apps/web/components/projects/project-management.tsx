@@ -140,8 +140,8 @@ export function ProjectsAdminPage() {
   return (
     <main>
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold">TIBA Project Admin</h1>
-        <p className="mt-1 text-sm text-slate-600">Create, rename, and archive projects.</p>
+        <h1 className="text-2xl font-semibold">Project Management</h1>
+        <p className="mt-1 text-sm text-slate-600">Manage project creation, renaming, and archiving inside the Projects module.</p>
       </div>
 
       <section className="mb-6 rounded-md border border-slate-200 bg-white p-4">
