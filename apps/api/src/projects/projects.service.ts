@@ -62,23 +62,52 @@ export class ProjectsService {
     if (!name) {
       throw new BadRequestException('name is required');
     }
-    if (!dto.customerId) {
-      throw new BadRequestException('customerId is required');
-    }
 
-    const customer = await this.prisma.customer.findUnique({ where: { id: dto.customerId } });
+    const customerId = await this.resolveCreateCustomerId(dto);
+    const customer = await this.prisma.customer.findUnique({ where: { id: customerId } });
     if (!customer) {
       throw new BadRequestException('Customer not found');
     }
 
     const project = await this.prisma.project.create({
       data: {
-        customer_id: dto.customerId,
+        customer_id: customerId,
         name
       }
     });
 
     return toProjectDto(project);
+  }
+
+  private async resolveCreateCustomerId(dto: CreateProjectDto): Promise<string> {
+    const customerId = dto.customerId?.trim();
+    const customerName = dto.customerName?.trim();
+
+    if (customerId) {
+      return customerId;
+    }
+
+    if (!customerName) {
+      throw new BadRequestException('customerId or customerName is required');
+    }
+
+    const matches = await this.prisma.customer.findMany({
+      where: { name: customerName },
+      select: { id: true },
+      take: 2
+    });
+
+    if (matches.length === 0) {
+      throw new BadRequestException(`Customer not found for customerName "${customerName}"`);
+    }
+
+    if (matches.length > 1) {
+      throw new BadRequestException(
+        `Multiple customers found for customerName "${customerName}". Please use customerId.`
+      );
+    }
+
+    return matches[0].id;
   }
 
   async updateProject(user: AuthUser, id: string, dto: UpdateProjectDto): Promise<ProjectDto> {

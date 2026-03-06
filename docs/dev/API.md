@@ -13,7 +13,7 @@
 - `POST /customers` (tiba roles only) -> create customer `{ name }`
 - `PATCH /customers/:id` (tiba roles only) -> update customer `{ name }`
 - `GET /projects` -> `{ items, page, pageSize, total }` with camelCase project keys
-- `POST /projects` (tiba roles only) -> create project `{ customerId, name }`
+- `POST /projects` (tiba roles only) -> create project with either `{ customerId, name }` or `{ customerName, name }`
 - `PATCH /projects/:id` (tiba roles only) -> update project `{ name?, isArchived? }`
 - `GET /tickets` -> `{ items, page, pageSize, total }` with camelCase ticket summary keys
 - `POST /tickets` -> returns `TicketDto` in camelCase
@@ -59,6 +59,11 @@ Customers list query params:
 
 Projects response item example:
 - `{ "id": "...", "customerId": "...", "name": "...", "isArchived": false, "createdAt": "...", "updatedAt": "..." }`
+
+Project create notes:
+- `customerId` and `customerName` are alternatives; provide one.
+- `customerName` uses exact match lookup.
+- If no customer is found by `customerName`, API returns `400` with a clear message.
 
 Project management policy:
 - Prefer archive/unarchive via `PATCH /projects/:id` (`isArchived`) instead of hard-delete.

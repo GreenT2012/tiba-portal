@@ -168,6 +168,11 @@ export function TibaBoard({ currentUserSub }: { currentUserSub: string }) {
       <div className="mb-6">
         <h1 className="text-2xl font-semibold">TIBA Board</h1>
         <p className="mt-1 text-sm text-slate-600">Operational triage views for internal support roles.</p>
+        <div className="mt-3">
+          <Link className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm" href="/tiba/projects">
+            Manage Projects
+          </Link>
+        </div>
       </div>
 
       <div className="mb-4 flex flex-wrap gap-2">

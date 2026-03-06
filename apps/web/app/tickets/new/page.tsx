@@ -31,6 +31,7 @@ type SelectedFile = {
 type ProjectOption = {
   id: string;
   name: string;
+  isArchived?: boolean;
 };
 
 const MAX_ATTACHMENT_BYTES = Number(process.env.NEXT_PUBLIC_MAX_ATTACHMENT_BYTES ?? 10 * 1024 * 1024);
@@ -106,9 +107,10 @@ export default function NewTicketPage() {
           throw new Error('Failed to load projects');
         }
 
-        const data = (await response.json()) as { items?: Array<{ id: string; name: string }> };
+        const data = (await response.json()) as { items?: Array<{ id: string; name: string; isArchived?: boolean }> };
         const items = Array.isArray(data.items) ? data.items : [];
-        setProjectOptions(items.map((project) => ({ id: project.id, name: project.name })));
+        const visibleItems = isTibaUser ? items : items.filter((project) => !project.isArchived);
+        setProjectOptions(visibleItems.map((project) => ({ id: project.id, name: project.name, isArchived: project.isArchived })));
       } catch (error) {
         if ((error as Error).name === 'AbortError') {
           return;
@@ -123,7 +125,7 @@ export default function NewTicketPage() {
     void loadProjects();
 
     return () => controller.abort();
-  }, [debouncedProjectQuery]);
+  }, [debouncedProjectQuery, isTibaUser]);
 
   const addFiles = (files: FileList | null) => {
     if (!files) {

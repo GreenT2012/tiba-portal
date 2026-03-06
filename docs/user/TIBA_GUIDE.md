@@ -26,6 +26,13 @@ Board actions:
 - In `Open`/`My`, change status inline (`OPEN`, `IN_PROGRESS`, `CLOSED`).
 - Click a ticket title to open detail view at `/tickets/[id]`.
 
+## Project Admin
+
+Open `/tiba/projects` to manage customer projects:
+- Create projects with `customerId` + `name`.
+- Rename existing projects.
+- Archive/unarchive projects without deleting history.
+
 ## Planned Flows
 
 - Access internal dashboard
