@@ -19,7 +19,13 @@ function isActive(pathname: string, href: string) {
     return pathname === '/tickets/new';
   }
   if (href === '/tiba') {
-    return pathname === '/tiba' || pathname.startsWith('/tiba/');
+    return pathname === '/tiba';
+  }
+  if (href === '/tiba/projects') {
+    return pathname === '/tiba/projects';
+  }
+  if (href === '/tiba/customers') {
+    return pathname === '/tiba/customers';
   }
   return pathname === href;
 }
@@ -65,9 +71,23 @@ export function TopNav({ email, roles }: TopNavProps) {
             New Ticket
           </Link>
           {isTiba && (
-            <Link className={`${baseClass} ${isActive(pathname, '/tiba') ? activeClass : inactiveClass}`} href="/tiba">
-              TIBA Board
-            </Link>
+            <>
+              <Link className={`${baseClass} ${isActive(pathname, '/tiba') ? activeClass : inactiveClass}`} href="/tiba">
+                TIBA Board
+              </Link>
+              <Link
+                className={`${baseClass} ${isActive(pathname, '/tiba/projects') ? activeClass : inactiveClass}`}
+                href="/tiba/projects"
+              >
+                TIBA Projects
+              </Link>
+              <Link
+                className={`${baseClass} ${isActive(pathname, '/tiba/customers') ? activeClass : inactiveClass}`}
+                href="/tiba/customers"
+              >
+                TIBA Customers
+              </Link>
+            </>
           )}
         </nav>
 
