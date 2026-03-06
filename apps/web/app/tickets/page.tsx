@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useSession } from 'next-auth/react';
 import { useEffect, useState } from 'react';
 import { AssigneeOption, assigneeDisplayLabel } from '@/components/users/assignee-select';
 
@@ -22,10 +23,54 @@ type TicketsResponse = {
   total: number;
 };
 
+type ProjectItem = {
+  id: string;
+  name: string;
+  customerId: string;
+};
+
+type ProjectsResponse = {
+  items: ProjectItem[];
+};
+
+type CustomerItem = {
+  id: string;
+  name: string;
+};
+
+type CustomersResponse = {
+  items: CustomerItem[];
+};
+
+type UserItem = {
+  id: string;
+  username: string | null;
+  email: string | null;
+  firstName: string | null;
+  lastName: string | null;
+};
+
+function shortId(id: string) {
+  return id.slice(0, 8);
+}
+
+function userDisplay(user: UserItem) {
+  const fullName = `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim();
+  if (fullName) {
+    return fullName;
+  }
+  return user.username || user.email || shortId(user.id);
+}
+
 export default function TicketsPage() {
+  const { data: session } = useSession();
+  const isTiba = Boolean(session?.roles?.includes('tiba_agent') || session?.roles?.includes('tiba_admin'));
   const [data, setData] = useState<TicketsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [projectById, setProjectById] = useState<Record<string, { name: string; customerId: string }>>({});
+  const [customerNameById, setCustomerNameById] = useState<Record<string, string>>({});
+  const [userDisplayById, setUserDisplayById] = useState<Record<string, string>>({});
 
   useEffect(() => {
     const run = async () => {
@@ -46,6 +91,83 @@ export default function TicketsPage() {
     void run();
   }, []);
 
+  useEffect(() => {
+    const run = async () => {
+      try {
+        const projectsRes = await fetch('/api/backend/projects?page=1&pageSize=200&sort=name&order=asc', {
+          cache: 'no-store'
+        });
+        if (projectsRes.ok) {
+          const projectsJson = (await projectsRes.json()) as ProjectsResponse;
+          const projectsMap: Record<string, { name: string; customerId: string }> = {};
+          for (const project of projectsJson.items ?? []) {
+            projectsMap[project.id] = { name: project.name, customerId: project.customerId };
+          }
+          setProjectById(projectsMap);
+        }
+
+        if (!isTiba) {
+          return;
+        }
+
+        const [customersRes, usersRes] = await Promise.all([
+          fetch('/api/backend/customers?page=1&pageSize=200&sort=name&order=asc', { cache: 'no-store' }),
+          fetch('/api/backend/users?limit=50', { cache: 'no-store' })
+        ]);
+
+        if (customersRes.ok) {
+          const customersJson = (await customersRes.json()) as CustomersResponse;
+          const map: Record<string, string> = {};
+          for (const customer of customersJson.items ?? []) {
+            map[customer.id] = customer.name;
+          }
+          setCustomerNameById(map);
+        }
+
+        if (usersRes.ok) {
+          const usersJson = (await usersRes.json()) as UserItem[];
+          const map: Record<string, string> = {};
+          for (const user of usersJson ?? []) {
+            map[user.id] = userDisplay(user);
+          }
+          setUserDisplayById(map);
+        }
+      } catch {
+        // non-critical lookups
+      }
+    };
+
+    void run();
+  }, [isTiba]);
+
+  const projectLabel = (projectId: string) => {
+    const project = projectById[projectId];
+    if (!project) {
+      return shortId(projectId);
+    }
+    if (!isTiba) {
+      return project.name;
+    }
+    const customerName = customerNameById[project.customerId] ?? `Customer ${shortId(project.customerId)}`;
+    return `${customerName} • ${project.name}`;
+  };
+
+  const assigneeLabel = (ticket: TicketSummary) => {
+    if (!ticket.assigneeUserId) {
+      return 'Unassigned';
+    }
+    if (ticket.assignee) {
+      return assigneeDisplayLabel(ticket.assignee);
+    }
+    if (userDisplayById[ticket.assigneeUserId]) {
+      return userDisplayById[ticket.assigneeUserId];
+    }
+    if (!isTiba) {
+      return 'Assigned';
+    }
+    return shortId(ticket.assigneeUserId);
+  };
+
   return (
     <main>
       <div className="mb-6 flex items-center justify-between">
@@ -65,16 +187,10 @@ export default function TicketsPage() {
               <Link className="block rounded-md border border-slate-200 bg-white p-4" href={`/tickets/${ticket.id}`} key={ticket.id}>
                 <h2 className="font-medium text-slate-900">{ticket.title}</h2>
                 <p className="mt-1 text-sm text-slate-600">
-                  {ticket.type} - {ticket.status} - project {ticket.projectId}
+                  {ticket.type} - {ticket.status} - {projectLabel(ticket.projectId)}
                 </p>
                 <p className="mt-1 text-xs text-slate-500">
-                  assignee:{' '}
-                  {ticket.assignee
-                    ? assigneeDisplayLabel(ticket.assignee)
-                    : ticket.assigneeUserId
-                      ? ticket.assigneeUserId.slice(0, 8)
-                      : 'unassigned'}{' '}
-                  - updated {new Date(ticket.updatedAt).toLocaleString()}
+                  assignee: {assigneeLabel(ticket)} - updated {new Date(ticket.updatedAt).toLocaleString()}
                 </p>
               </Link>
             ))

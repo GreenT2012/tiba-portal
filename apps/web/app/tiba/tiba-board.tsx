@@ -19,6 +19,33 @@ type TicketsResponse = {
   items: TicketSummary[];
 };
 
+type ProjectItem = {
+  id: string;
+  name: string;
+  customerId: string;
+};
+
+type ProjectsResponse = {
+  items: ProjectItem[];
+};
+
+type CustomerItem = {
+  id: string;
+  name: string;
+};
+
+type CustomersResponse = {
+  items: CustomerItem[];
+};
+
+type UserItem = {
+  id: string;
+  username: string | null;
+  email: string | null;
+  firstName: string | null;
+  lastName: string | null;
+};
+
 type BoardTab = 'new' | 'open' | 'my' | 'closed';
 
 type StatusFilter = 'ALL' | 'OPEN' | 'IN_PROGRESS' | 'CLOSED';
@@ -50,17 +77,32 @@ function queryForTab(tab: BoardTab): string {
 
 function shortAssignee(assigneeUserId: string | null, currentUserSub: string): string {
   if (!assigneeUserId) {
-    return 'unassigned';
+    return 'Unassigned';
   }
   if (assigneeUserId === currentUserSub) {
-    return 'me';
+    return 'Me';
   }
   return assigneeUserId.slice(0, 8);
 }
 
-function assigneeForDisplay(ticket: TicketSummary, currentUserSub: string): string {
+function userDisplay(user: UserItem) {
+  const fullName = `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim();
+  if (fullName) {
+    return fullName;
+  }
+  return user.username || user.email || user.id.slice(0, 8);
+}
+
+function assigneeForDisplay(
+  ticket: TicketSummary,
+  currentUserSub: string,
+  userDisplayById: Record<string, string>
+): string {
   if (ticket.assignee) {
     return assigneeDisplayLabel(ticket.assignee);
+  }
+  if (ticket.assigneeUserId && userDisplayById[ticket.assigneeUserId]) {
+    return userDisplayById[ticket.assigneeUserId];
   }
   return shortAssignee(ticket.assigneeUserId, currentUserSub);
 }
@@ -75,6 +117,9 @@ export function TibaBoard({ currentUserSub }: { currentUserSub: string }) {
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('ALL');
   const [assigningId, setAssigningId] = useState<string | null>(null);
   const [statusUpdatingId, setStatusUpdatingId] = useState<string | null>(null);
+  const [projectById, setProjectById] = useState<Record<string, { name: string; customerId: string }>>({});
+  const [customerNameById, setCustomerNameById] = useState<Record<string, string>>({});
+  const [userDisplayById, setUserDisplayById] = useState<Record<string, string>>({});
 
   const loadTickets = async () => {
     setLoading(true);
@@ -99,6 +144,49 @@ export function TibaBoard({ currentUserSub }: { currentUserSub: string }) {
   useEffect(() => {
     void loadTickets();
   }, [activeTab]);
+
+  useEffect(() => {
+    const run = async () => {
+      try {
+        const [projectsRes, customersRes, usersRes] = await Promise.all([
+          fetch('/api/backend/projects?page=1&pageSize=200&sort=name&order=asc', { cache: 'no-store' }),
+          fetch('/api/backend/customers?page=1&pageSize=200&sort=name&order=asc', { cache: 'no-store' }),
+          fetch('/api/backend/users?limit=50', { cache: 'no-store' })
+        ]);
+
+        if (projectsRes.ok) {
+          const projectsJson = (await projectsRes.json()) as ProjectsResponse;
+          const map: Record<string, { name: string; customerId: string }> = {};
+          for (const project of projectsJson.items ?? []) {
+            map[project.id] = { name: project.name, customerId: project.customerId };
+          }
+          setProjectById(map);
+        }
+
+        if (customersRes.ok) {
+          const customersJson = (await customersRes.json()) as CustomersResponse;
+          const map: Record<string, string> = {};
+          for (const customer of customersJson.items ?? []) {
+            map[customer.id] = customer.name;
+          }
+          setCustomerNameById(map);
+        }
+
+        if (usersRes.ok) {
+          const usersJson = (await usersRes.json()) as UserItem[];
+          const map: Record<string, string> = {};
+          for (const user of usersJson ?? []) {
+            map[user.id] = userDisplay(user);
+          }
+          setUserDisplayById(map);
+        }
+      } catch {
+        // non-critical lookups
+      }
+    };
+
+    void run();
+  }, []);
 
   const filteredTickets = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -161,6 +249,15 @@ export function TibaBoard({ currentUserSub }: { currentUserSub: string }) {
     } finally {
       setStatusUpdatingId(null);
     }
+  };
+
+  const projectLabel = (projectId: string) => {
+    const project = projectById[projectId];
+    if (!project) {
+      return projectId.slice(0, 8);
+    }
+    const customerName = customerNameById[project.customerId] ?? `Customer ${project.customerId.slice(0, 8)}`;
+    return `${customerName} • ${project.name}`;
   };
 
   return (
@@ -260,8 +357,8 @@ export function TibaBoard({ currentUserSub }: { currentUserSub: string }) {
                   <td className="px-3 py-2">{ticket.type}</td>
                   <td className="px-3 py-2">{ticket.status}</td>
                   <td className="px-3 py-2">{new Date(ticket.updatedAt).toLocaleString()}</td>
-                  <td className="px-3 py-2">{assigneeForDisplay(ticket, currentUserSub)}</td>
-                  <td className="px-3 py-2">{ticket.projectId}</td>
+                  <td className="px-3 py-2">{assigneeForDisplay(ticket, currentUserSub, userDisplayById)}</td>
+                  <td className="px-3 py-2">{projectLabel(ticket.projectId)}</td>
                   <td className="px-3 py-2">
                     {activeTab === 'new' ? (
                       <button

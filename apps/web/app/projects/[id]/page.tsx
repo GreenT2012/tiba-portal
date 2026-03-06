@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { useEffect, useState } from 'react';
 
 type Project = {
@@ -30,6 +31,14 @@ type TicketsResponse = {
   total: number;
 };
 
+type UserItem = {
+  id: string;
+  username: string | null;
+  email: string | null;
+  firstName: string | null;
+  lastName: string | null;
+};
+
 type Tab = 'all' | 'open' | 'inProgress' | 'closed';
 
 function queryForTab(projectId: string, tab: Tab) {
@@ -46,6 +55,8 @@ function queryForTab(projectId: string, tab: Tab) {
 }
 
 export default function ProjectDetailPage() {
+  const { data: session } = useSession();
+  const isTiba = Boolean(session?.roles?.includes('tiba_agent') || session?.roles?.includes('tiba_admin'));
   const params = useParams<{ id: string }>();
   const projectId = params.id;
 
@@ -57,6 +68,34 @@ export default function ProjectDetailPage() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [ticketsLoading, setTicketsLoading] = useState(true);
   const [ticketsError, setTicketsError] = useState<string | null>(null);
+  const [userDisplayById, setUserDisplayById] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!isTiba) {
+      return;
+    }
+
+    const run = async () => {
+      try {
+        const response = await fetch('/api/backend/users?limit=50', { cache: 'no-store' });
+        if (!response.ok) {
+          return;
+        }
+
+        const users = (await response.json()) as UserItem[];
+        const map: Record<string, string> = {};
+        for (const user of users ?? []) {
+          const fullName = `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim();
+          map[user.id] = fullName || user.username || user.email || user.id.slice(0, 8);
+        }
+        setUserDisplayById(map);
+      } catch {
+        // non-critical lookup
+      }
+    };
+
+    void run();
+  }, [isTiba]);
 
   useEffect(() => {
     if (!projectId) {
@@ -131,6 +170,19 @@ export default function ProjectDetailPage() {
 
     return () => controller.abort();
   }, [projectId, tab]);
+
+  const assigneeLabel = (assigneeUserId: string | null) => {
+    if (!assigneeUserId) {
+      return 'Unassigned';
+    }
+    if (userDisplayById[assigneeUserId]) {
+      return userDisplayById[assigneeUserId];
+    }
+    if (!isTiba) {
+      return 'Assigned';
+    }
+    return assigneeUserId.slice(0, 8);
+  };
 
   return (
     <main>
@@ -217,7 +269,7 @@ export default function ProjectDetailPage() {
                     <td className="px-3 py-2">{ticket.type}</td>
                     <td className="px-3 py-2">{ticket.status}</td>
                     <td className="px-3 py-2">{new Date(ticket.updatedAt).toLocaleString()}</td>
-                    <td className="px-3 py-2">{ticket.assigneeUserId ? ticket.assigneeUserId.slice(0, 8) : 'unassigned'}</td>
+                    <td className="px-3 py-2">{assigneeLabel(ticket.assigneeUserId)}</td>
                   </tr>
                 ))
               ) : (
