@@ -1,8 +1,8 @@
 import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
-import { TibaBoard } from './tiba-board';
+import { UsersAdminPage } from './users-admin';
 
-export default async function TibaPage() {
+export default async function TibaUsersPage() {
   const session = await auth();
   const roles = session?.roles ?? [];
   const isTiba = roles.includes('tiba_agent') || roles.includes('tiba_admin');
@@ -15,5 +15,5 @@ export default async function TibaPage() {
     redirect('/tickets');
   }
 
-  return <TibaBoard currentUserSub={session.user.sub} />;
+  return <UsersAdminPage />;
 }

@@ -31,7 +31,13 @@ type SelectedFile = {
 type ProjectOption = {
   id: string;
   name: string;
+  customerId: string;
   isArchived?: boolean;
+};
+
+type CustomerOption = {
+  id: string;
+  name: string;
 };
 
 const MAX_ATTACHMENT_BYTES = Number(process.env.NEXT_PUBLIC_MAX_ATTACHMENT_BYTES ?? 10 * 1024 * 1024);
@@ -54,8 +60,16 @@ export default function NewTicketPage() {
   const [projectOptions, setProjectOptions] = useState<ProjectOption[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(false);
   const [projectsError, setProjectsError] = useState<string | null>(null);
-  const [selectedProjectName, setSelectedProjectName] = useState('');
+  const [selectedProjectLabel, setSelectedProjectLabel] = useState('');
   const [projectDropdownOpen, setProjectDropdownOpen] = useState(false);
+  const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false);
+  const [customerQuery, setCustomerQuery] = useState('');
+  const [debouncedCustomerQuery, setDebouncedCustomerQuery] = useState('');
+  const [customerOptions, setCustomerOptions] = useState<CustomerOption[]>([]);
+  const [customersLoading, setCustomersLoading] = useState(false);
+  const [customersError, setCustomersError] = useState<string | null>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<CustomerOption | null>(null);
+  const [customerNameById, setCustomerNameById] = useState<Record<string, string>>({});
 
   const {
     register,
@@ -87,6 +101,69 @@ export default function NewTicketPage() {
   }, [projectQuery]);
 
   useEffect(() => {
+    const timeout = setTimeout(() => {
+      setDebouncedCustomerQuery(customerQuery.trim());
+    }, 300);
+
+    return () => clearTimeout(timeout);
+  }, [customerQuery]);
+
+  useEffect(() => {
+    if (!isTibaUser || !customerDropdownOpen) {
+      return;
+    }
+
+    const controller = new AbortController();
+
+    async function loadCustomers() {
+      setCustomersLoading(true);
+      setCustomersError(null);
+
+      try {
+        const params = new URLSearchParams({
+          q: debouncedCustomerQuery,
+          page: '1',
+          pageSize: '20',
+          sort: 'name',
+          order: 'asc'
+        });
+
+        const response = await fetch(`/api/backend/customers?${params.toString()}`, { signal: controller.signal });
+        if (!response.ok) {
+          throw new Error('Failed to load customers');
+        }
+
+        const data = (await response.json()) as { items?: CustomerOption[] };
+        const items = Array.isArray(data.items) ? data.items : [];
+        setCustomerOptions(items);
+        setCustomerNameById((prev) => {
+          const next = { ...prev };
+          for (const customer of items) {
+            next[customer.id] = customer.name;
+          }
+          return next;
+        });
+      } catch (error) {
+        if ((error as Error).name === 'AbortError') {
+          return;
+        }
+        setCustomersError(error instanceof Error ? error.message : 'Failed to load customers');
+        setCustomerOptions([]);
+      } finally {
+        setCustomersLoading(false);
+      }
+    }
+
+    void loadCustomers();
+
+    return () => controller.abort();
+  }, [debouncedCustomerQuery, customerDropdownOpen, isTibaUser]);
+
+  useEffect(() => {
+    if (!projectDropdownOpen) {
+      return;
+    }
+
     const controller = new AbortController();
 
     async function loadProjects() {
@@ -102,15 +179,28 @@ export default function NewTicketPage() {
           order: 'asc'
         });
 
+        if (isTibaUser && selectedCustomer?.id) {
+          params.set('customerId', selectedCustomer.id);
+        }
+
         const response = await fetch(`/api/backend/projects?${params.toString()}`, { signal: controller.signal });
         if (!response.ok) {
           throw new Error('Failed to load projects');
         }
 
-        const data = (await response.json()) as { items?: Array<{ id: string; name: string; isArchived?: boolean }> };
+        const data = (await response.json()) as {
+          items?: Array<{ id: string; name: string; customerId: string; isArchived?: boolean }>;
+        };
         const items = Array.isArray(data.items) ? data.items : [];
         const visibleItems = isTibaUser ? items : items.filter((project) => !project.isArchived);
-        setProjectOptions(visibleItems.map((project) => ({ id: project.id, name: project.name, isArchived: project.isArchived })));
+        setProjectOptions(
+          visibleItems.map((project) => ({
+            id: project.id,
+            name: project.name,
+            customerId: project.customerId,
+            isArchived: project.isArchived
+          }))
+        );
       } catch (error) {
         if ((error as Error).name === 'AbortError') {
           return;
@@ -125,7 +215,15 @@ export default function NewTicketPage() {
     void loadProjects();
 
     return () => controller.abort();
-  }, [debouncedProjectQuery, isTibaUser]);
+  }, [debouncedProjectQuery, isTibaUser, projectDropdownOpen, selectedCustomer?.id]);
+
+  const customerLabel = (customerId: string) => customerNameById[customerId] ?? `Customer ${customerId.slice(0, 8)}`;
+  const projectOptionLabel = (project: ProjectOption) => {
+    if (!isTibaUser) {
+      return project.name;
+    }
+    return `${customerLabel(project.customerId)} • ${project.name}`;
+  };
 
   const addFiles = (files: FileList | null) => {
     if (!files) {
@@ -273,6 +371,70 @@ export default function NewTicketPage() {
 
           {step === 1 && (
             <div className="mt-4 space-y-4">
+              {isTibaUser && (
+                <div className="relative">
+                  <span className="mb-1 block text-sm font-medium">Customer Filter (optional)</span>
+                  <button
+                    className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-left text-sm"
+                    onClick={() => setCustomerDropdownOpen((open) => !open)}
+                    type="button"
+                  >
+                    {selectedCustomer ? selectedCustomer.name : 'Filter by customer'}
+                  </button>
+                  {selectedCustomer && (
+                    <button
+                      className="absolute right-2 top-8 rounded border border-slate-300 bg-white px-2 py-0.5 text-xs"
+                      onClick={() => {
+                        setSelectedCustomer(null);
+                        setCustomerQuery('');
+                        setValue('projectId', '', { shouldValidate: true });
+                        setSelectedProjectLabel('');
+                        setProjectQuery('');
+                      }}
+                      type="button"
+                    >
+                      Clear
+                    </button>
+                  )}
+                  {customerDropdownOpen && (
+                    <div className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md border border-slate-200 bg-white shadow-sm">
+                      <input
+                        className="w-full border-b border-slate-200 px-3 py-2 text-sm"
+                        onChange={(event) => setCustomerQuery(event.target.value)}
+                        placeholder="Search customers..."
+                        value={customerQuery}
+                      />
+                      {customersLoading && <div className="px-3 py-2 text-sm text-slate-500">Loading customers...</div>}
+                      {!customersLoading && customersError && (
+                        <div className="px-3 py-2 text-sm text-red-600">{customersError}</div>
+                      )}
+                      {!customersLoading && !customersError && customerOptions.length === 0 && (
+                        <div className="px-3 py-2 text-sm text-slate-500">No customers found.</div>
+                      )}
+                      {!customersLoading &&
+                        !customersError &&
+                        customerOptions.map((customer) => (
+                          <button
+                            className="block w-full px-3 py-2 text-left text-sm hover:bg-slate-100"
+                            key={customer.id}
+                            onClick={() => {
+                              setSelectedCustomer(customer);
+                              setCustomerNameById((prev) => ({ ...prev, [customer.id]: customer.name }));
+                              setCustomerDropdownOpen(false);
+                              setValue('projectId', '', { shouldValidate: true });
+                              setSelectedProjectLabel('');
+                              setProjectQuery('');
+                            }}
+                            type="button"
+                          >
+                            {customer.name}
+                          </button>
+                        ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <label className="block">
                 <span className="mb-1 block text-sm font-medium">Project</span>
                 <input type="hidden" {...register('projectId')} />
@@ -282,7 +444,7 @@ export default function NewTicketPage() {
                     onChange={(event) => {
                       setProjectQuery(event.target.value);
                       setValue('projectId', '', { shouldValidate: true });
-                      setSelectedProjectName('');
+                      setSelectedProjectLabel('');
                       setProjectDropdownOpen(true);
                     }}
                     onFocus={() => setProjectDropdownOpen(true)}
@@ -307,13 +469,14 @@ export default function NewTicketPage() {
                             key={project.id}
                             onClick={() => {
                               setValue('projectId', project.id, { shouldValidate: true });
-                              setSelectedProjectName(project.name);
-                              setProjectQuery(project.name);
+                              const label = projectOptionLabel(project);
+                              setSelectedProjectLabel(label);
+                              setProjectQuery(label);
                               setProjectDropdownOpen(false);
                             }}
                             type="button"
                           >
-                            {project.name}
+                            {projectOptionLabel(project)}
                           </button>
                         ))}
                     </div>
@@ -321,7 +484,7 @@ export default function NewTicketPage() {
                 </div>
                 {projectIdValue && (
                   <span className="mt-1 block text-xs text-slate-500">
-                    Selected: {selectedProjectName || projectIdValue}
+                    Selected: {selectedProjectLabel || projectIdValue}
                   </span>
                 )}
                 {errors.projectId && <span className="mt-1 block text-sm text-red-600">{errors.projectId.message}</span>}

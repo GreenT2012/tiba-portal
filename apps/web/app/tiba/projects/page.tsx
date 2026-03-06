@@ -8,7 +8,7 @@ export default async function TibaProjectsPage() {
   const isTiba = roles.includes('tiba_agent') || roles.includes('tiba_admin');
 
   if (!session) {
-    redirect('/api/auth/signin?callbackUrl=/tiba/projects');
+    redirect('/login');
   }
 
   if (!isTiba) {

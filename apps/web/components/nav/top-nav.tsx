@@ -27,6 +27,9 @@ function isActive(pathname: string, href: string) {
   if (href === '/tiba/customers') {
     return pathname === '/tiba/customers';
   }
+  if (href === '/tiba/users') {
+    return pathname === '/tiba/users';
+  }
   return pathname === href;
 }
 
@@ -86,6 +89,12 @@ export function TopNav({ email, roles }: TopNavProps) {
                 href="/tiba/customers"
               >
                 TIBA Customers
+              </Link>
+              <Link
+                className={`${baseClass} ${isActive(pathname, '/tiba/users') ? activeClass : inactiveClass}`}
+                href="/tiba/users"
+              >
+                TIBA Users
               </Link>
             </>
           )}

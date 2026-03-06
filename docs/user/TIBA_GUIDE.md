@@ -11,6 +11,7 @@ After login, use the top navigation:
 - `Tickets` for triage and ticket operations.
 - `New Ticket` for manual ticket creation.
 - `TIBA Board` for role-specific operational views.
+- `TIBA Users` for user provisioning and password reset.
 - `Logout` to trigger SSO logout via `/logout`.
 
 ## TIBA Board
@@ -32,6 +33,14 @@ Open `/tiba/projects` to manage customer projects:
 - Create projects with `customerId` + `name`.
 - Rename existing projects.
 - Archive/unarchive projects without deleting history.
+
+## User Management
+
+Open `/tiba/users` to manage Keycloak users from the portal:
+- Search users by username/email.
+- Create users with roles (`customer_user`, `tiba_agent`, `tiba_admin`).
+- For `customer_user`, assign a tenant via `customer_id` attribute (`customerId` in UI/API).
+- Set a temporary password for selected users.
 
 ## Planned Flows
 

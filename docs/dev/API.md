@@ -9,6 +9,8 @@
 - `GET /health` (public) -> `{ "ok": true }`
 - `GET /me` (authenticated) -> `{ "sub": string, "roles": string[], "customerId": string | null, "email": string | null }`
 - `GET /users` (tiba roles only) -> `[{ "id", "username", "email", "firstName", "lastName" }]`
+- `POST /users/provision` (tiba_admin) -> provision Keycloak user with roles/customer attribute
+- `POST /users/:id/reset-password` (tiba_admin) -> set temporary password `{ temporaryPassword }` -> `{ ok: true }`
 - `GET /customers` (tiba roles only) -> `{ items, page, pageSize, total }`
 - `POST /customers` (tiba roles only) -> create customer `{ name }`
 - `PATCH /customers/:id` (tiba roles only) -> update customer `{ name }`
@@ -89,10 +91,26 @@ Users endpoint authorization:
 - Allowed roles: `tiba_agent`, `tiba_admin`
 - `customer_user` is forbidden
 
+Users provisioning endpoint authorization:
+- Allowed role: `tiba_admin`
+- `customer_user` and `tiba_agent` are forbidden
+
+Users provisioning request (`POST /users/provision`):
+- `{ email, username?, firstName?, lastName?, roles, customerId? }`
+- `roles` allowed values: `customer_user`, `tiba_agent`, `tiba_admin`
+- if `roles` includes `customer_user`, `customerId` is required and must reference an existing customer
+
+Users provisioning response example:
+- `{ "id": "...", "username": "john", "email": "john@example.com", "firstName": "John", "lastName": "Doe", "roles": ["customer_user"], "customerId": "..." }`
+
 Keycloak admin service account configuration for `/users`:
-1. Create a confidential Keycloak client for API admin access.
+1. Create a confidential Keycloak client `api-admin` for API admin access.
 2. Enable service accounts on the client.
-3. Grant realm-management permissions required to read users/roles.
+3. Grant realm-management permissions required to read/provision users and roles:
+   - `view-users`
+   - `manage-users`
+   - `view-realm`
+   - `manage-realm`
 4. Set API env vars:
    - `KEYCLOAK_ADMIN_CLIENT_ID`
    - `KEYCLOAK_ADMIN_CLIENT_SECRET`

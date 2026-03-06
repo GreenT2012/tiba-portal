@@ -6,11 +6,10 @@ export default auth((req) => {
     return NextResponse.next();
   }
 
-  const signinUrl = new URL('/api/auth/signin', req.url);
-  signinUrl.searchParams.set('callbackUrl', req.nextUrl.pathname + req.nextUrl.search);
-  return NextResponse.redirect(signinUrl);
+  const loginUrl = new URL('/login', req.url);
+  return NextResponse.redirect(loginUrl);
 });
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/tickets/:path*', '/tiba/:path*', '/projects/:path*']
+  matcher: ['/', '/dashboard/:path*', '/tickets/:path*', '/tiba/:path*', '/projects/:path*']
 };
