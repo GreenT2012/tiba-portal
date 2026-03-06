@@ -13,7 +13,9 @@ export function AuthButtons() {
     return (
       <button
         className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm"
-        onClick={() => signIn('keycloak')}
+        onClick={() => {
+          void signIn('keycloak', { callbackUrl: '/dashboard' }, { prompt: 'login', max_age: '0' });
+        }}
         type="button"
       >
         Login
@@ -25,7 +27,7 @@ export function AuthButtons() {
     <button
       className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm"
       onClick={() => {
-        window.location.href = '/api/auth/logout';
+        window.location.href = '/logout';
       }}
       type="button"
     >

@@ -1,6 +1,9 @@
-import { BadGatewayException, BadRequestException, Injectable } from '@nestjs/common';
+import { BadGatewayException, BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
 import { ListUsersDto } from './dto/list-users.dto';
-import { UserDto } from './users.types';
+import { ProvisionUserDto } from './dto/provision-user.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
+import { ProvisionedUserDto, ResetPasswordResponseDto, UserDto } from './users.types';
 
 type KeycloakTokenResponse = {
   access_token?: string;
@@ -12,10 +15,22 @@ type KeycloakUser = {
   email?: string;
   firstName?: string;
   lastName?: string;
+  attributes?: Record<string, string[] | undefined>;
 };
+
+type KeycloakRoleRepresentation = {
+  id: string;
+  name: string;
+};
+
+const ALLOWED_ROLES = new Set(['customer_user', 'tiba_agent', 'tiba_admin']);
 
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
+
+  constructor(private readonly prisma: PrismaService) {}
+
   async listUsers(query: ListUsersDto): Promise<UserDto[]> {
     const limit = this.parseLimit(query.limit);
     const accessToken = await this.getAdminAccessToken();
@@ -50,6 +65,124 @@ export class UsersService {
     return this.toUserDto(user);
   }
 
+  async provisionUser(dto: ProvisionUserDto): Promise<ProvisionedUserDto> {
+    const email = dto.email?.trim().toLowerCase();
+    if (!email || !this.isValidEmail(email)) {
+      throw new BadRequestException('email must be valid');
+    }
+
+    const roles = this.normalizeRoles(dto.roles);
+    const customerId = dto.customerId?.trim() || null;
+    if (roles.includes('customer_user')) {
+      if (!customerId) {
+        throw new BadRequestException('customerId is required when roles include customer_user');
+      }
+      const customer = await this.prisma.customer.findUnique({ where: { id: customerId } });
+      if (!customer) {
+        throw new BadRequestException('Customer not found');
+      }
+    }
+
+    const username = dto.username?.trim() || email.split('@')[0];
+    const firstName = dto.firstName?.trim();
+    const lastName = dto.lastName?.trim();
+    const accessToken = await this.getAdminAccessToken();
+    const realm = process.env.KEYCLOAK_ADMIN_REALM ?? 'tiba';
+    const base = `${this.getKeycloakBaseUrl()}/admin/realms/${encodeURIComponent(realm)}`;
+
+    const createPayload = {
+      username,
+      email,
+      enabled: true,
+      ...(firstName ? { firstName } : {}),
+      ...(lastName ? { lastName } : {}),
+      attributes: {
+        ...(customerId ? { customer_id: [customerId] } : {})
+      }
+    };
+
+    const createResponse = await fetch(`${base}/users`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(createPayload)
+    });
+
+    if (!createResponse.ok) {
+      const body = await createResponse.text();
+      this.logger.error(`Keycloak user provisioning failed (${createResponse.status}): ${body}`);
+      throw new BadGatewayException('Failed to provision user in Keycloak');
+    }
+
+    const location = createResponse.headers.get('location') ?? '';
+    const userId = location.split('/').pop();
+    if (!userId) {
+      throw new BadGatewayException('Failed to determine provisioned user ID');
+    }
+
+    const roleRepresentations = await Promise.all(
+      roles.map((role) => this.fetchRealmRoleRepresentation(accessToken, base, role))
+    );
+
+    const roleMappingResponse = await fetch(`${base}/users/${encodeURIComponent(userId)}/role-mappings/realm`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(roleRepresentations)
+    });
+
+    if (!roleMappingResponse.ok) {
+      const body = await roleMappingResponse.text();
+      this.logger.error(`Keycloak role assignment failed (${roleMappingResponse.status}): ${body}`);
+      throw new BadGatewayException('Failed to assign user roles in Keycloak');
+    }
+
+    return {
+      id: userId,
+      username,
+      email,
+      firstName: firstName ?? null,
+      lastName: lastName ?? null,
+      roles,
+      customerId
+    };
+  }
+
+  async resetPassword(userId: string, dto: ResetPasswordDto): Promise<ResetPasswordResponseDto> {
+    const temporaryPassword = dto.temporaryPassword?.trim();
+    if (!temporaryPassword) {
+      throw new BadRequestException('temporaryPassword is required');
+    }
+
+    const accessToken = await this.getAdminAccessToken();
+    const realm = process.env.KEYCLOAK_ADMIN_REALM ?? 'tiba';
+    const base = `${this.getKeycloakBaseUrl()}/admin/realms/${encodeURIComponent(realm)}`;
+    const response = await fetch(`${base}/users/${encodeURIComponent(userId)}/reset-password`, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        type: 'password',
+        temporary: true,
+        value: temporaryPassword
+      })
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      this.logger.error(`Keycloak reset password failed (${response.status}): ${body}`);
+      throw new BadGatewayException('Failed to reset user password in Keycloak');
+    }
+
+    return { ok: true };
+  }
+
   private parseLimit(rawLimit: string | undefined): number {
     if (rawLimit === undefined) {
       return 20;
@@ -61,6 +194,25 @@ export class UsersService {
     }
 
     return Math.min(parsed, 50);
+  }
+
+  private isValidEmail(value: string): boolean {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  }
+
+  private normalizeRoles(input: string[] | undefined): string[] {
+    if (!Array.isArray(input) || input.length === 0) {
+      throw new BadRequestException('roles must be a non-empty array');
+    }
+
+    const normalized = [...new Set(input.map((role) => role.trim()).filter(Boolean))];
+    if (normalized.length === 0) {
+      throw new BadRequestException('roles must be a non-empty array');
+    }
+    if (normalized.some((role) => !ALLOWED_ROLES.has(role))) {
+      throw new BadRequestException('roles must contain only: customer_user, tiba_agent, tiba_admin');
+    }
+    return normalized;
   }
 
   private async getAdminAccessToken(): Promise<string> {
@@ -130,6 +282,28 @@ export class UsersService {
     }
 
     return users.slice(0, options.limit);
+  }
+
+  private async fetchRealmRoleRepresentation(
+    accessToken: string,
+    base: string,
+    roleName: string
+  ): Promise<KeycloakRoleRepresentation> {
+    const response = await fetch(`${base}/roles/${encodeURIComponent(roleName)}`, {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      this.logger.error(`Keycloak role lookup failed (${response.status}) for ${roleName}: ${body}`);
+      throw new BadGatewayException('Failed to resolve role in Keycloak');
+    }
+
+    const role = (await response.json()) as KeycloakRoleRepresentation;
+    return {
+      id: role.id,
+      name: role.name
+    };
   }
 
   private getKeycloakBaseUrl(): string {

@@ -15,3 +15,4 @@
 - Add `GET /api/v1/users` for TIBA roles, backed by Keycloak Admin API client credentials, to search assignable users.
 - Extend TIBA project management APIs with reliable `PATCH /api/v1/projects/:id`, plus `POST /api/v1/projects` support for `{ customerName, name }` lookup in addition to `{ customerId, name }`.
 - Add TIBA-only Customers API (`GET /api/v1/customers`, `POST /api/v1/customers`, `PATCH /api/v1/customers/:id`) with camelCase responses for customer administration.
+- Add TIBA user management MVP: Keycloak provisioning endpoint (`POST /api/v1/users/provision`), temporary password reset endpoint (`POST /api/v1/users/:id/reset-password`), and new web admin page at `/tiba/users`.

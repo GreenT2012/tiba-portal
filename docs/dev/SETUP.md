@@ -20,6 +20,11 @@
      - Set client type to OpenID Connect, confidential.
      - Add redirect URI: `http://localhost:3000/api/auth/callback/keycloak`.
      - Add post-logout redirect URI: `http://localhost:3000`.
+   - Keycloak setup for API provisioning:
+      - Create confidential client `api-admin` in realm `tiba`.
+      - Enable service accounts.
+      - Grant realm-management roles: `view-users`, `manage-users`, `view-realm`, `manage-realm`.
+      - Set `KEYCLOAK_ADMIN_CLIENT_ID=api-admin` and `KEYCLOAK_ADMIN_CLIENT_SECRET` in `apps/api/.env`.
 2. Start infrastructure:
    - `docker compose up -d`
 3. Install workspace dependencies:
@@ -35,3 +40,11 @@
 - API Swagger: [http://localhost:3001/api/docs](http://localhost:3001/api/docs)
 - Keycloak: [http://localhost:8080](http://localhost:8080)
 - MinIO Console: [http://localhost:9001](http://localhost:9001)
+
+## Login/Logout Check
+
+1. Open `http://localhost:3000` in an incognito window and verify redirect to `/login`.
+2. Click `Sign in with Keycloak` and verify Keycloak shows the login screen.
+3. Login and verify you land on `/dashboard` (or another authenticated route).
+4. Click navbar `Logout` and verify redirect back to `/login`.
+5. Open `/api/auth/session` and verify it returns `null` after logout.
