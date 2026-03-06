@@ -1,4 +1,4 @@
-import { apiErrorSchema } from '@tiba/shared';
+import { apiErrorSchema } from '@tiba/shared/errors';
 import { buildApiErrorEnvelope } from './api';
 
 export type NormalizedProxyResult =

@@ -81,6 +81,29 @@ This repository starts as a modular monolith split into workspace apps/packages.
 - Multi-tenant isolation is enforced at the data layer with `customer_id` on all tenant-scoped entities (`Project`, `Ticket`, `TicketComment`, `TicketAttachment`, and tenant-scoped `AuditLog` rows).
 - `Ticket.status` and `Ticket.type` are stored as `TEXT` intentionally to keep workflow/category expansion backward-compatible without immediate schema migrations; strict validation happens in application code.
 
+## Module Boundaries
+
+- `customers`: customer tenant administration only
+- `projects`: project listing and project administration
+- `tickets`: ticket lifecycle, comments, attachments, and operational views
+- `users`: Keycloak-backed user search and provisioning
+- `outbox`: persisted internal integration seam for additive modules
+
+### Internal Event Seam
+
+Ticket write actions now enqueue persisted outbox events in the same transaction as the triggering write.
+
+Current ticket lifecycle topics:
+- `ticket.created`
+- `ticket.status_changed`
+- `ticket.assigned`
+- `ticket.comment_added`
+- `ticket.attachment_added`
+
+Künftige additive Module wie notifications, SLA, reports oder webhooks sollen an dieser Outbox-Naht andocken statt direkte Calls in Ticket-Write-Flows einzubauen.
+
+See [ADR 0003 - Ticket Lifecycle Outbox](./ADR/0003-ticket-lifecycle-outbox.md).
+
 ## Extension Strategy
 
 The current runtime architecture is intentionally service-centered for tenant visibility and resource access.
@@ -98,3 +121,16 @@ The strongest current coupling hotspot is `tickets`; see [Modularity Review](./M
 - Define bounded contexts and ownership boundaries per module more explicitly as the module surface grows
 - Add outbox/inbox processing workers and delivery guarantees
 - Define event contracts in `packages/shared`
+
+
+## Web Domain Layer
+
+`apps/web` keeps the BFF as the transport/auth boundary, but backend access should now be grouped by domain under `apps/web/features/*`.
+
+Current direction:
+- `features/tickets/api.ts`
+- `features/projects/api.ts`
+- `features/customers/api.ts`
+- `features/users/api.ts`
+
+Pages may still orchestrate UI state, but they should no longer own backend URLs and response parsing directly when a reusable domain helper exists.

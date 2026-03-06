@@ -2,22 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { readApiError } from '@/lib/api';
-
-type Project = {
-  id: string;
-  customerId: string;
-  name: string;
-  createdAt: string;
-  updatedAt: string;
-};
-
-type ProjectsResponse = {
-  items: Project[];
-  page: number;
-  pageSize: number;
-  total: number;
-};
+import { listProjects, type Project } from '@/features/projects/api';
 
 export default function ProjectsPage() {
   const [query, setQuery] = useState('');
@@ -35,39 +20,34 @@ export default function ProjectsPage() {
   }, [query]);
 
   useEffect(() => {
-    const controller = new AbortController();
+    let cancelled = false;
 
     async function loadProjects() {
       setLoading(true);
       setError(null);
 
       try {
-        const params = new URLSearchParams({ q: debouncedQuery, pageSize: '50' });
-        const response = await fetch(`/api/backend/projects?${params.toString()}`, {
-          cache: 'no-store',
-          signal: controller.signal
-        });
-
-        if (!response.ok) {
-          throw new Error(await readApiError(response, 'Failed to load projects'));
+        const data = await listProjects({ q: debouncedQuery, pageSize: 50 });
+        if (!cancelled) {
+          setProjects(data.items);
         }
-
-        const data = (await response.json()) as ProjectsResponse;
-        setProjects(Array.isArray(data.items) ? data.items : []);
       } catch (loadError) {
-        if ((loadError as Error).name === 'AbortError') {
-          return;
+        if (!cancelled) {
+          setError(loadError instanceof Error ? loadError.message : 'Failed to load projects');
+          setProjects([]);
         }
-        setError(loadError instanceof Error ? loadError.message : 'Failed to load projects');
-        setProjects([]);
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     }
 
     void loadProjects();
 
-    return () => controller.abort();
+    return () => {
+      cancelled = true;
+    };
   }, [debouncedQuery]);
 
   return (

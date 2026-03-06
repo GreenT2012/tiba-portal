@@ -1,4 +1,4 @@
-import { apiErrorSchema, type ApiErrorCode } from '@tiba/shared';
+import { apiErrorSchema, type ApiErrorCode } from '@tiba/shared/errors';
 
 const STATUS_TO_CODE: Partial<Record<number, ApiErrorCode>> = {
   400: 'BAD_REQUEST',

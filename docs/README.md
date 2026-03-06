@@ -12,6 +12,7 @@
 - [Modularity Review](./dev/MODULARITY_REVIEW.md)
 - [ADR 0001 - Initial Architecture](./dev/ADR/0001-initial-architecture.md)
 - [ADR 0002 - Auth and Tenant Context](./dev/ADR/0002-auth-and-tenant-context.md)
+- [ADR 0003 - Ticket Lifecycle Outbox](./dev/ADR/0003-ticket-lifecycle-outbox.md)
 
 ## User Guides
 

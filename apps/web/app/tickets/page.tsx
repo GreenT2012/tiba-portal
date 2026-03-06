@@ -4,58 +4,16 @@ import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { useEffect, useState } from 'react';
 import { AssigneeOption, assigneeDisplayLabel } from '@/components/users/assignee-select';
-import { readApiError } from '@/lib/api';
-
-type TicketSummary = {
-  id: string;
-  title: string;
-  status: string;
-  type: string;
-  projectId: string;
-  assigneeUserId: string | null;
-  assignee?: AssigneeOption | null;
-  updatedAt: string;
-};
-
-type TicketsResponse = {
-  items: TicketSummary[];
-  page: number;
-  pageSize: number;
-  total: number;
-};
-
-type ProjectItem = {
-  id: string;
-  name: string;
-  customerId: string;
-};
-
-type ProjectsResponse = {
-  items: ProjectItem[];
-};
-
-type CustomerItem = {
-  id: string;
-  name: string;
-};
-
-type CustomersResponse = {
-  items: CustomerItem[];
-};
-
-type UserItem = {
-  id: string;
-  username: string | null;
-  email: string | null;
-  firstName: string | null;
-  lastName: string | null;
-};
+import { listCustomers } from '@/features/customers/api';
+import { listProjects } from '@/features/projects/api';
+import { listTickets, type TicketSummary } from '@/features/tickets/api';
+import { listUsers } from '@/features/users/api';
 
 function shortId(id: string) {
   return id.slice(0, 8);
 }
 
-function userDisplay(user: UserItem) {
+function userDisplay(user: { id: string; username: string | null; email: string | null; firstName: string | null; lastName: string | null }) {
   const fullName = `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim();
   if (fullName) {
     return fullName;
@@ -66,7 +24,7 @@ function userDisplay(user: UserItem) {
 export default function TicketsPage() {
   const { data: session } = useSession();
   const isTiba = Boolean(session?.roles?.includes('tiba_agent') || session?.roles?.includes('tiba_admin'));
-  const [data, setData] = useState<TicketsResponse | null>(null);
+  const [items, setItems] = useState<TicketSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [projectById, setProjectById] = useState<Record<string, { name: string; customerId: string }>>({});
@@ -76,65 +34,31 @@ export default function TicketsPage() {
   useEffect(() => {
     const run = async () => {
       try {
-        const res = await fetch('/api/backend/tickets?view=open', { cache: 'no-store' });
-        if (!res.ok) {
-          throw new Error(await readApiError(res, 'Failed to load tickets'));
-        }
-        const json = (await res.json()) as TicketsResponse;
-        setData(json);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to load tickets');
-      } finally {
-        setLoading(false);
-      }
-    };
+        const [tickets, projects] = await Promise.all([
+          listTickets({ view: 'open' }),
+          listProjects({ page: 1, pageSize: 200, sort: 'name', order: 'asc' })
+        ]);
 
-    void run();
-  }, []);
-
-  useEffect(() => {
-    const run = async () => {
-      try {
-        const projectsRes = await fetch('/api/backend/projects?page=1&pageSize=200&sort=name&order=asc', {
-          cache: 'no-store'
-        });
-        if (projectsRes.ok) {
-          const projectsJson = (await projectsRes.json()) as ProjectsResponse;
-          const projectsMap: Record<string, { name: string; customerId: string }> = {};
-          for (const project of projectsJson.items ?? []) {
-            projectsMap[project.id] = { name: project.name, customerId: project.customerId };
-          }
-          setProjectById(projectsMap);
-        }
+        setItems(tickets.items);
+        setProjectById(
+          Object.fromEntries(projects.items.map((project) => [project.id, { name: project.name, customerId: project.customerId }]))
+        );
 
         if (!isTiba) {
           return;
         }
 
-        const [customersRes, usersRes] = await Promise.all([
-          fetch('/api/backend/customers?page=1&pageSize=200&sort=name&order=asc', { cache: 'no-store' }),
-          fetch('/api/backend/users?limit=50', { cache: 'no-store' })
+        const [customers, users] = await Promise.all([
+          listCustomers({ page: 1, pageSize: 200, sort: 'name', order: 'asc' }),
+          listUsers({ limit: 50 })
         ]);
 
-        if (customersRes.ok) {
-          const customersJson = (await customersRes.json()) as CustomersResponse;
-          const map: Record<string, string> = {};
-          for (const customer of customersJson.items ?? []) {
-            map[customer.id] = customer.name;
-          }
-          setCustomerNameById(map);
-        }
-
-        if (usersRes.ok) {
-          const usersJson = (await usersRes.json()) as UserItem[];
-          const map: Record<string, string> = {};
-          for (const user of usersJson ?? []) {
-            map[user.id] = userDisplay(user);
-          }
-          setUserDisplayById(map);
-        }
-      } catch {
-        // non-critical lookups
+        setCustomerNameById(Object.fromEntries(customers.items.map((customer) => [customer.id, customer.name])));
+        setUserDisplayById(Object.fromEntries(users.map((user) => [user.id, userDisplay(user)])));
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to load tickets');
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -153,7 +77,7 @@ export default function TicketsPage() {
     return `${customerName} • ${project.name}`;
   };
 
-  const assigneeLabel = (ticket: TicketSummary) => {
+  const assigneeLabel = (ticket: TicketSummary & { assignee?: AssigneeOption | null }) => {
     if (!ticket.assigneeUserId) {
       return 'Unassigned';
     }
@@ -183,8 +107,8 @@ export default function TicketsPage() {
 
       {!loading && !error && (
         <div className="space-y-3">
-          {data?.items.length ? (
-            data.items.map((ticket) => (
+          {items.length ? (
+            items.map((ticket) => (
               <Link className="block rounded-md border border-slate-200 bg-white p-4" href={`/tickets/${ticket.id}`} key={ticket.id}>
                 <h2 className="font-medium text-slate-900">{ticket.title}</h2>
                 <p className="mt-1 text-sm text-slate-600">

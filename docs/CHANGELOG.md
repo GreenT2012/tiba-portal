@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Add a persisted ticket lifecycle outbox seam plus internal ticket sub-services and shared domain-sliced contracts to reduce feature coupling across API, shared, and web layers.
 - Add modularity review documentation covering current coupling hotspots, extension strategy, and the architectural path for additive modules such as notifications.
 - Bootstrap monorepo with API, web app, shared package, infra, CI, and docs skeleton.
 - Add initial Prisma domain schema and baseline migration for customers, projects, tickets, comments, attachments, and audit logs.

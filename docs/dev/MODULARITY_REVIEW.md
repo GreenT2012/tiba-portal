@@ -85,20 +85,15 @@ The project has reusable building blocks such as:
 - `StorageService`
 - auth helper functions in `auth/authz.ts`
 
-That is useful, but they are still called directly by feature services. There is no explicit extension seam such as domain events, ports, or an outbox-based integration pipeline.
+That is useful, but they are still called directly by feature services. There is now a first persisted outbox seam for ticket lifecycle events, but only for ticket-driven flows.
 
-Result: new modules are likely to be integrated by adding more direct calls into existing services.
+Result: the architecture is moving in the right direction, but new modules must keep using this seam instead of adding fresh direct calls into existing services.
 
 ### 3. There is no real additive event model yet
 
-The docs already point toward outbox/event contracts, but the implemented code does not use them yet.
+Ticket lifecycle changes now persist outbox events, which gives the codebase its first real additive integration seam.
 
-That means a future module like `notifications` would currently need one of these approaches:
-- add direct calls into `TicketsService`
-- add more logic into `AuditService`
-- re-query the database indirectly after ticket writes
-
-All three create tighter coupling than necessary.
+That reduces the need to couple future modules directly into `TicketsService`, but only if follow-up modules actually consume the outbox instead of bypassing it.
 
 ### 4. `packages/shared` is useful, but too flat
 

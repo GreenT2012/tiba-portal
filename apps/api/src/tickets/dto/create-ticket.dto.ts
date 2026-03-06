@@ -1,5 +1,5 @@
 import { IsIn, IsOptional, IsString } from 'class-validator';
-import { ticketStatusValues, ticketTypeValues } from '@tiba/shared';
+import { ticketStatusValues, ticketTypeValues } from '@tiba/shared/tickets';
 
 export class CreateTicketDto {
   @IsString()

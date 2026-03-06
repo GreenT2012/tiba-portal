@@ -177,3 +177,8 @@ Postman flow (attachments):
 - Browser-to-API traffic is intentionally routed only through the web BFF.
 - Keycloak login/logout and MinIO object upload/download still require live external services for full end-to-end verification.
 - The standard JSON error envelope is stable at API and BFF boundaries; web pages should not parse raw upstream JSON strings directly.
+
+
+## Internal outbox
+
+Ticket write actions also persist internal outbox events (`ticket.created`, `ticket.status_changed`, `ticket.assigned`, `ticket.comment_added`, `ticket.attachment_added`) in the same database transaction. This is an internal integration seam for future modules such as notifications, SLA, and reporting; it is not an external HTTP API.

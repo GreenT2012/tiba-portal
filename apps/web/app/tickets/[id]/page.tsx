@@ -4,36 +4,18 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useEffect, useState } from 'react';
-import { AssigneeOption, AssigneeSelect, assigneeDisplayLabel } from '@/components/users/assignee-select';
-import { readApiError } from '@/lib/api';
+import { AssigneeSelect, assigneeDisplayLabel } from '@/components/users/assignee-select';
+import {
+  addTicketComment,
+  assignTicket,
+  getTicket,
+  presignTicketAttachmentDownload,
+  presignTicketAttachmentUpload,
+  updateTicketStatus,
+  type TicketDetail
+} from '@/features/tickets/api';
 
-type TicketComment = {
-  id: string;
-  authorUserId: string;
-  body: string;
-  createdAt: string;
-};
-
-type TicketAttachment = {
-  id: string;
-  filename: string;
-  mime: string;
-  sizeBytes: number;
-  createdAt: string;
-};
-
-type TicketDetail = {
-  id: string;
-  title: string;
-  type: string;
-  status: 'OPEN' | 'IN_PROGRESS' | 'CLOSED';
-  updatedAt: string;
-  assigneeUserId: string | null;
-  assignee?: AssigneeOption | null;
-  description: string;
-  comments: TicketComment[];
-  attachments: TicketAttachment[];
-};
+type TicketAttachment = TicketDetail['attachments'][number];
 
 type UploadState = 'pending' | 'uploading' | 'done' | 'failed';
 
@@ -91,12 +73,7 @@ export default function TicketDetailPage() {
     setError(null);
 
     try {
-      const response = await fetch(`/api/backend/tickets/${ticketId}`, { cache: 'no-store' });
-      if (!response.ok) {
-        throw new Error(await readApiError(response, 'Failed to load ticket'));
-      }
-
-      const data = (await response.json()) as TicketDetail;
+      const data = await getTicket(ticketId);
       setTicket(data);
       setSelectedAssigneeUserId(data.assigneeUserId ?? null);
     } catch (loadError) {
@@ -122,15 +99,7 @@ export default function TicketDetailPage() {
     setCommentError(null);
 
     try {
-      const response = await fetch(`/api/backend/tickets/${ticketId}/comments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ body: commentBody.trim() })
-      });
-
-      if (!response.ok) {
-        throw new Error(await readApiError(response, 'Failed to add comment'));
-      }
+      await addTicketComment(ticketId, { body: commentBody.trim() });
 
       setCommentBody('');
       await loadTicket();
@@ -151,12 +120,7 @@ export default function TicketDetailPage() {
     setAttachmentErrors((prev) => ({ ...prev, [attachmentId]: null }));
 
     try {
-      const response = await fetch(`/api/backend/tickets/${ticketId}/attachments/${attachmentId}/presign-download`);
-      if (!response.ok) {
-        throw new Error(await readApiError(response, 'Failed to load preview URL'));
-      }
-
-      const data = (await response.json()) as { downloadUrl: string };
+      const data = await presignTicketAttachmentDownload(ticketId, attachmentId);
       setDownloadUrlCache((prev) => ({ ...prev, [attachmentId]: data.downloadUrl }));
       return data.downloadUrl;
     } catch (downloadError) {
@@ -243,24 +207,11 @@ export default function TicketDetailPage() {
         setFileState(fileEntry.id, 'uploading');
 
         try {
-          const presignResponse = await fetch(`/api/backend/tickets/${ticketId}/attachments/presign-upload`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              filename: fileEntry.file.name,
-              mime: fileEntry.file.type,
-              sizeBytes: fileEntry.file.size
-            })
+          const presign = await presignTicketAttachmentUpload(ticketId, {
+            filename: fileEntry.file.name,
+            mime: fileEntry.file.type,
+            sizeBytes: fileEntry.file.size
           });
-
-          if (!presignResponse.ok) {
-            throw new Error(await readApiError(presignResponse, 'Failed to prepare attachment upload'));
-          }
-
-          const presign = (await presignResponse.json()) as {
-            uploadUrl: string;
-            requiredHeaders?: { 'Content-Type'?: string };
-          };
 
           const uploadResponse = await fetch(presign.uploadUrl, {
             method: 'PUT',
@@ -298,15 +249,7 @@ export default function TicketDetailPage() {
     setStatusError(null);
 
     try {
-      const response = await fetch(`/api/backend/tickets/${ticketId}/status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status })
-      });
-
-      if (!response.ok) {
-        throw new Error(await readApiError(response, 'Failed to update status'));
-      }
+      await updateTicketStatus(ticketId, { status });
 
       await loadTicket();
     } catch (updateError) {
@@ -321,15 +264,7 @@ export default function TicketDetailPage() {
     setAssignError(null);
 
     try {
-      const response = await fetch(`/api/backend/tickets/${ticketId}/assign`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ assigneeUserId })
-      });
-
-      if (!response.ok) {
-        throw new Error(await readApiError(response, 'Failed to update assignee'));
-      }
+      await assignTicket(ticketId, { assigneeUserId });
 
       await loadTicket();
     } catch (updateError) {

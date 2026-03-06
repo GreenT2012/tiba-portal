@@ -1,34 +1,12 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { readApiError } from '@/lib/api';
-
-type UserItem = {
-  id: string;
-  username: string | null;
-  email: string | null;
-  firstName: string | null;
-  lastName: string | null;
-};
-
-type ProvisionedUser = UserItem & {
-  roles: string[];
-  customerId: string | null;
-};
-
-type CustomerOption = {
-  id: string;
-  name: string;
-};
-
-type UsersResponse = UserItem[];
-type CustomersResponse = {
-  items: CustomerOption[];
-};
+import { listCustomers, type Customer } from '@/features/customers/api';
+import { listUsers, provisionUser, resetUserPassword, type ProvisionedUser, type User } from '@/features/users/api';
 
 const ALL_ROLES = ['customer_user', 'tiba_agent', 'tiba_admin'] as const;
 
-function userDisplay(user: UserItem) {
+function userDisplay(user: User) {
   const name = `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim();
   if (name) {
     return name;
@@ -43,20 +21,20 @@ function shortId(id: string) {
 export function UsersAdminPage({ canManageUsers }: { canManageUsers: boolean }) {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [users, setUsers] = useState<UserItem[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [usersError, setUsersError] = useState<string | null>(null);
-  const [selectedUser, setSelectedUser] = useState<UserItem | null>(null);
+  const [selectedUser, setSelectedUser] = useState<User | ProvisionedUser | null>(null);
 
   const [email, setEmail] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [selectedRoles, setSelectedRoles] = useState<string[]>(['customer_user']);
-  const [selectedCustomer, setSelectedCustomer] = useState<CustomerOption | null>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [customerOpen, setCustomerOpen] = useState(false);
   const [customerSearch, setCustomerSearch] = useState('');
   const [debouncedCustomerSearch, setDebouncedCustomerSearch] = useState('');
-  const [customerOptions, setCustomerOptions] = useState<CustomerOption[]>([]);
+  const [customerOptions, setCustomerOptions] = useState<Customer[]>([]);
   const [customersLoading, setCustomersLoading] = useState(false);
   const [customersError, setCustomersError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -70,18 +48,12 @@ export function UsersAdminPage({ canManageUsers }: { canManageUsers: boolean }) 
   const needsCustomer = useMemo(() => selectedRoles.includes('customer_user'), [selectedRoles]);
 
   useEffect(() => {
-    const timeout = setTimeout(() => {
-      setDebouncedSearch(search.trim());
-    }, 300);
-
+    const timeout = setTimeout(() => setDebouncedSearch(search.trim()), 300);
     return () => clearTimeout(timeout);
   }, [search]);
 
   useEffect(() => {
-    const timeout = setTimeout(() => {
-      setDebouncedCustomerSearch(customerSearch.trim());
-    }, 300);
-
+    const timeout = setTimeout(() => setDebouncedCustomerSearch(customerSearch.trim()), 300);
     return () => clearTimeout(timeout);
   }, [customerSearch]);
 
@@ -99,15 +71,9 @@ export function UsersAdminPage({ canManageUsers }: { canManageUsers: boolean }) 
       setUsersError(null);
 
       try {
-        const params = new URLSearchParams({ q: debouncedSearch, limit: '20' });
-        const response = await fetch(`/api/backend/users?${params.toString()}`, { cache: 'no-store' });
-        if (!response.ok) {
-          throw new Error(await readApiError(response, 'Failed to load users'));
-        }
-
-        const data = (await response.json()) as UsersResponse;
+        const data = await listUsers({ q: debouncedSearch, limit: 20 });
         if (!cancelled) {
-          setUsers(Array.isArray(data) ? data : []);
+          setUsers(data);
         }
       } catch (error) {
         if (!cancelled) {
@@ -137,21 +103,9 @@ export function UsersAdminPage({ canManageUsers }: { canManageUsers: boolean }) 
       setCustomersLoading(true);
       setCustomersError(null);
       try {
-        const params = new URLSearchParams({
-          q: debouncedCustomerSearch,
-          page: '1',
-          pageSize: '20',
-          sort: 'name',
-          order: 'asc'
-        });
-        const response = await fetch(`/api/backend/customers?${params.toString()}`, { cache: 'no-store' });
-        if (!response.ok) {
-          throw new Error(await readApiError(response, 'Failed to load customers'));
-        }
-
-        const data = (await response.json()) as CustomersResponse;
+        const data = await listCustomers({ q: debouncedCustomerSearch, page: 1, pageSize: 20, sort: 'name', order: 'asc' });
         if (!cancelled) {
-          setCustomerOptions(Array.isArray(data.items) ? data.items : []);
+          setCustomerOptions(data.items);
         }
       } catch (error) {
         if (!cancelled) {
@@ -200,25 +154,13 @@ export function UsersAdminPage({ canManageUsers }: { canManageUsers: boolean }) 
 
     setProvisioning(true);
     try {
-      const payload = {
+      const created = await provisionUser({
         email: trimmedEmail,
         firstName: firstName.trim() || undefined,
         lastName: lastName.trim() || undefined,
         roles: selectedRoles,
         customerId: needsCustomer ? selectedCustomer?.id : undefined
-      };
-
-      const response = await fetch('/api/backend/users/provision', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
       });
-
-      if (!response.ok) {
-        throw new Error(await readApiError(response, 'Failed to create user'));
-      }
-
-      const created = (await response.json()) as ProvisionedUser;
       setSuccess(`User ${created.email ?? created.username ?? created.id} created.`);
       setSelectedUser(created);
       setEmail('');
@@ -246,14 +188,7 @@ export function UsersAdminPage({ canManageUsers }: { canManageUsers: boolean }) 
     setResetting(true);
     setResetMessage(null);
     try {
-      const response = await fetch(`/api/backend/users/${selectedUser.id}/reset-password`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ temporaryPassword: tempPassword.trim() })
-      });
-      if (!response.ok) {
-        throw new Error(await readApiError(response, 'Failed to reset password'));
-      }
+      await resetUserPassword(selectedUser.id, { temporaryPassword: tempPassword.trim() });
       setTempPassword('');
       setResetMessage('Temporary password updated.');
     } catch (error) {
@@ -302,42 +237,27 @@ export function UsersAdminPage({ canManageUsers }: { canManageUsers: boolean }) 
         <h2 className="text-sm font-medium">Create user</h2>
         {!canManageUsers && <p className="mt-2 text-sm text-slate-500">Only `tiba_admin` can provision users.</p>}
         <div className="mt-3 grid gap-2 md:grid-cols-2">
-          <input
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm"
-            disabled={!canManageUsers}
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="Email"
-            value={email}
-          />
-          <input
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm"
-            disabled={!canManageUsers}
-            onChange={(event) => setFirstName(event.target.value)}
-            placeholder="First name (optional)"
-            value={firstName}
-          />
-          <input
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm"
-            disabled={!canManageUsers}
-            onChange={(event) => setLastName(event.target.value)}
-            placeholder="Last name (optional)"
-            value={lastName}
-          />
+          <input className="rounded-md border border-slate-300 px-3 py-2 text-sm" disabled={!canManageUsers} onChange={(event) => setEmail(event.target.value)} placeholder="Email" value={email} />
+          <input className="rounded-md border border-slate-300 px-3 py-2 text-sm" disabled={!canManageUsers} onChange={(event) => setFirstName(event.target.value)} placeholder="First name (optional)" value={firstName} />
+          <input className="rounded-md border border-slate-300 px-3 py-2 text-sm" disabled={!canManageUsers} onChange={(event) => setLastName(event.target.value)} placeholder="Last name (optional)" value={lastName} />
+          <div className="rounded-md border border-slate-300 px-3 py-2 text-sm">
+            <p className="mb-2 text-xs uppercase tracking-wide text-slate-500">Roles</p>
+            <div className="flex flex-wrap gap-2">
+              {ALL_ROLES.map((role) => (
+                <label className="flex items-center gap-2 text-sm" key={role}>
+                  <input checked={selectedRoles.includes(role)} disabled={!canManageUsers} onChange={() => toggleRole(role)} type="checkbox" />
+                  <span>{role}</span>
+                </label>
+              ))}
+            </div>
+          </div>
         </div>
 
-        <div className="mt-3 flex flex-wrap gap-3">
-          {ALL_ROLES.map((role) => (
-            <label className="flex items-center gap-2 text-sm" key={role}>
-              <input checked={selectedRoles.includes(role)} disabled={!canManageUsers} onChange={() => toggleRole(role)} type="checkbox" />
-              {role}
-            </label>
-          ))}
-        </div>
-
-        {needsCustomer && canManageUsers && (
-          <div className="relative mt-3 max-w-sm">
+        {needsCustomer && (
+          <div className="relative mt-3">
             <button
               className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-left text-sm"
+              disabled={!canManageUsers}
               onClick={() => setCustomerOpen((open) => !open)}
               type="button"
             >
@@ -346,6 +266,7 @@ export function UsersAdminPage({ canManageUsers }: { canManageUsers: boolean }) 
             {selectedCustomer && (
               <button
                 className="absolute right-2 top-2 rounded border border-slate-300 bg-white px-2 py-0.5 text-xs"
+                disabled={!canManageUsers}
                 onClick={() => {
                   setSelectedCustomer(null);
                   setCustomerSearch('');
@@ -357,28 +278,22 @@ export function UsersAdminPage({ canManageUsers }: { canManageUsers: boolean }) 
             )}
             {customerOpen && (
               <div className="absolute z-10 mt-1 w-full rounded-md border border-slate-200 bg-white shadow-sm">
-                <input
-                  className="w-full border-b border-slate-200 px-3 py-2 text-sm"
-                  onChange={(event) => setCustomerSearch(event.target.value)}
-                  placeholder="Search customers..."
-                  value={customerSearch}
-                />
+                <input className="w-full border-b border-slate-200 px-3 py-2 text-sm" disabled={!canManageUsers} onChange={(event) => setCustomerSearch(event.target.value)} placeholder="Search customers..." value={customerSearch} />
                 <div className="max-h-60 overflow-auto">
                   {customersLoading && <div className="px-3 py-2 text-sm text-slate-500">Loading customers...</div>}
                   {!customersLoading && customersError && <div className="px-3 py-2 text-sm text-red-600">{customersError}</div>}
-                  {!customersLoading && !customersError && customerOptions.length === 0 && (
-                    <div className="px-3 py-2 text-sm text-slate-500">No customers found.</div>
-                  )}
+                  {!customersLoading && !customersError && customerOptions.length === 0 && <div className="px-3 py-2 text-sm text-slate-500">No customers found.</div>}
                   {!customersLoading &&
                     !customersError &&
                     customerOptions.map((customer) => (
                       <button
                         className="block w-full px-3 py-2 text-left text-sm hover:bg-slate-100"
+                        disabled={!canManageUsers}
                         key={customer.id}
                         onClick={() => {
                           setSelectedCustomer(customer);
-                          setCustomerOpen(false);
                           setCustomerSearch('');
+                          setCustomerOpen(false);
                         }}
                         type="button"
                       >
@@ -391,11 +306,12 @@ export function UsersAdminPage({ canManageUsers }: { canManageUsers: boolean }) 
           </div>
         )}
 
-        {formError && <p className="mt-3 text-sm text-red-600">{formError}</p>}
-        {success && <p className="mt-3 text-sm text-green-700">{success}</p>}
+        {formError && <p className="mt-2 text-sm text-red-600">{formError}</p>}
+        {success && <p className="mt-2 text-sm text-green-700">{success}</p>}
+
         <button
-          className="mt-3 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm"
-          disabled={provisioning || !canManageUsers}
+          className="mt-3 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+          disabled={!canManageUsers || provisioning}
           onClick={() => void createUser()}
           type="button"
         >
@@ -405,29 +321,28 @@ export function UsersAdminPage({ canManageUsers }: { canManageUsers: boolean }) 
 
       <section className="rounded-md border border-slate-200 bg-white p-4">
         <h2 className="text-sm font-medium">Reset password</h2>
-        {!canManageUsers && <p className="mt-2 text-sm text-slate-500">Only `tiba_admin` can set temporary passwords.</p>}
-        {!selectedUser && <p className="mt-2 text-sm text-slate-500">Select a user from search results first.</p>}
-        {selectedUser && canManageUsers && (
-          <div className="mt-3">
-            <p className="text-sm text-slate-700">
-              Selected: <span className="font-medium">{userDisplay(selectedUser)}</span> ({selectedUser.email ?? selectedUser.username ?? `User ${shortId(selectedUser.id)}`})
-            </p>
+        {!selectedUser ? (
+          <p className="mt-2 text-sm text-slate-500">Select a user from search results first.</p>
+        ) : (
+          <>
+            <p className="mt-2 text-sm text-slate-700">Selected user: {userDisplay(selectedUser)}</p>
             <input
               className="mt-3 w-full max-w-sm rounded-md border border-slate-300 px-3 py-2 text-sm"
+              disabled={!canManageUsers}
               onChange={(event) => setTempPassword(event.target.value)}
               placeholder="Temporary password"
               value={tempPassword}
             />
             <button
-              className="ml-0 mt-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm md:ml-2"
-              disabled={resetting}
+              className="mt-3 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+              disabled={!canManageUsers || resetting}
               onClick={() => void resetPassword()}
               type="button"
             >
               {resetting ? 'Updating...' : 'Set temporary password'}
             </button>
-            {resetMessage && <p className="mt-2 text-sm text-slate-700">{resetMessage}</p>}
-          </div>
+            {resetMessage && <p className="mt-2 text-sm text-slate-600">{resetMessage}</p>}
+          </>
         )}
       </section>
     </main>
