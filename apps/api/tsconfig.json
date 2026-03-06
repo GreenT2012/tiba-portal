@@ -11,6 +11,10 @@
     "sourceMap": true,
     "outDir": "./dist",
     "baseUrl": "./",
+    "paths": {
+      "@tiba/shared": ["../../packages/shared/src"],
+      "@tiba/shared/*": ["../../packages/shared/src/*"]
+    },
     "incremental": true
   },
   "include": ["src/**/*", "test/**/*"]

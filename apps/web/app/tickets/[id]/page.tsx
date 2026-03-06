@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useEffect, useState } from 'react';
 import { AssigneeOption, AssigneeSelect, assigneeDisplayLabel } from '@/components/users/assignee-select';
+import { readApiError } from '@/lib/api';
 
 type TicketComment = {
   id: string;
@@ -92,7 +93,7 @@ export default function TicketDetailPage() {
     try {
       const response = await fetch(`/api/backend/tickets/${ticketId}`, { cache: 'no-store' });
       if (!response.ok) {
-        throw new Error(await response.text());
+        throw new Error(await readApiError(response, 'Failed to load ticket'));
       }
 
       const data = (await response.json()) as TicketDetail;
@@ -128,7 +129,7 @@ export default function TicketDetailPage() {
       });
 
       if (!response.ok) {
-        throw new Error(await response.text());
+        throw new Error(await readApiError(response, 'Failed to add comment'));
       }
 
       setCommentBody('');
@@ -152,7 +153,7 @@ export default function TicketDetailPage() {
     try {
       const response = await fetch(`/api/backend/tickets/${ticketId}/attachments/${attachmentId}/presign-download`);
       if (!response.ok) {
-        throw new Error(await response.text());
+        throw new Error(await readApiError(response, 'Failed to load preview URL'));
       }
 
       const data = (await response.json()) as { downloadUrl: string };
@@ -253,7 +254,7 @@ export default function TicketDetailPage() {
           });
 
           if (!presignResponse.ok) {
-            throw new Error(await presignResponse.text());
+            throw new Error(await readApiError(presignResponse, 'Failed to prepare attachment upload'));
           }
 
           const presign = (await presignResponse.json()) as {
@@ -304,7 +305,7 @@ export default function TicketDetailPage() {
       });
 
       if (!response.ok) {
-        throw new Error(await response.text());
+        throw new Error(await readApiError(response, 'Failed to update status'));
       }
 
       await loadTicket();
@@ -327,7 +328,7 @@ export default function TicketDetailPage() {
       });
 
       if (!response.ok) {
-        throw new Error(await response.text());
+        throw new Error(await readApiError(response, 'Failed to update assignee'));
       }
 
       await loadTicket();

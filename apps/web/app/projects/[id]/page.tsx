@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useEffect, useState } from 'react';
+import { readApiError } from '@/lib/api';
 
 type Project = {
   id: string;
@@ -114,7 +115,7 @@ export default function ProjectDetailPage() {
           signal: controller.signal
         });
         if (!response.ok) {
-          throw new Error(await response.text());
+          throw new Error(await readApiError(response, 'Failed to load project'));
         }
 
         setProject((await response.json()) as Project);
@@ -150,7 +151,7 @@ export default function ProjectDetailPage() {
           signal: controller.signal
         });
         if (!response.ok) {
-          throw new Error(await response.text());
+          throw new Error(await readApiError(response, 'Failed to load tickets'));
         }
 
         const data = (await response.json()) as TicketsResponse;

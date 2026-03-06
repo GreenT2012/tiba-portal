@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { readApiError } from '@/lib/api';
 
 type Project = {
   id: string;
@@ -48,7 +49,7 @@ export default function ProjectsPage() {
         });
 
         if (!response.ok) {
-          throw new Error(await response.text());
+          throw new Error(await readApiError(response, 'Failed to load projects'));
         }
 
         const data = (await response.json()) as ProjectsResponse;

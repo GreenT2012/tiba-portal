@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { readApiError } from '@/lib/api';
 
 export type AssigneeOption = {
   id: string;
@@ -76,7 +77,7 @@ export function AssigneeSelect({
         const params = new URLSearchParams({ q: debouncedQuery, limit: '20' });
         const response = await fetch(`/api/backend/users?${params.toString()}`, { signal: controller.signal });
         if (!response.ok) {
-          throw new Error(await response.text());
+          throw new Error(await readApiError(response, 'Failed to load users'));
         }
 
         const data = (await response.json()) as AssigneeOption[];

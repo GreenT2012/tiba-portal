@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { readApiError } from '@/lib/api';
 
 type UserItem = {
   id: string;
@@ -27,10 +28,6 @@ type CustomersResponse = {
 
 const ALL_ROLES = ['customer_user', 'tiba_agent', 'tiba_admin'] as const;
 
-function getErrorMessage(status: number, body: string) {
-  return `Request failed (${status}): ${body.trim() || 'No response body'}`;
-}
-
 function userDisplay(user: UserItem) {
   const name = `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim();
   if (name) {
@@ -43,7 +40,7 @@ function shortId(id: string) {
   return id.slice(0, 8);
 }
 
-export function UsersAdminPage() {
+export function UsersAdminPage({ canManageUsers }: { canManageUsers: boolean }) {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [users, setUsers] = useState<UserItem[]>([]);
@@ -105,8 +102,7 @@ export function UsersAdminPage() {
         const params = new URLSearchParams({ q: debouncedSearch, limit: '20' });
         const response = await fetch(`/api/backend/users?${params.toString()}`, { cache: 'no-store' });
         if (!response.ok) {
-          const body = await response.text();
-          throw new Error(getErrorMessage(response.status, body));
+          throw new Error(await readApiError(response, 'Failed to load users'));
         }
 
         const data = (await response.json()) as UsersResponse;
@@ -150,8 +146,7 @@ export function UsersAdminPage() {
         });
         const response = await fetch(`/api/backend/customers?${params.toString()}`, { cache: 'no-store' });
         if (!response.ok) {
-          const body = await response.text();
-          throw new Error(getErrorMessage(response.status, body));
+          throw new Error(await readApiError(response, 'Failed to load customers'));
         }
 
         const data = (await response.json()) as CustomersResponse;
@@ -220,8 +215,7 @@ export function UsersAdminPage() {
       });
 
       if (!response.ok) {
-        const body = await response.text();
-        throw new Error(getErrorMessage(response.status, body));
+        throw new Error(await readApiError(response, 'Failed to create user'));
       }
 
       const created = (await response.json()) as ProvisionedUser;
@@ -258,8 +252,7 @@ export function UsersAdminPage() {
         body: JSON.stringify({ temporaryPassword: tempPassword.trim() })
       });
       if (!response.ok) {
-        const body = await response.text();
-        throw new Error(getErrorMessage(response.status, body));
+        throw new Error(await readApiError(response, 'Failed to reset password'));
       }
       setTempPassword('');
       setResetMessage('Temporary password updated.');
@@ -307,21 +300,25 @@ export function UsersAdminPage() {
 
       <section className="mb-6 rounded-md border border-slate-200 bg-white p-4">
         <h2 className="text-sm font-medium">Create user</h2>
+        {!canManageUsers && <p className="mt-2 text-sm text-slate-500">Only `tiba_admin` can provision users.</p>}
         <div className="mt-3 grid gap-2 md:grid-cols-2">
           <input
             className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+            disabled={!canManageUsers}
             onChange={(event) => setEmail(event.target.value)}
             placeholder="Email"
             value={email}
           />
           <input
             className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+            disabled={!canManageUsers}
             onChange={(event) => setFirstName(event.target.value)}
             placeholder="First name (optional)"
             value={firstName}
           />
           <input
             className="rounded-md border border-slate-300 px-3 py-2 text-sm"
+            disabled={!canManageUsers}
             onChange={(event) => setLastName(event.target.value)}
             placeholder="Last name (optional)"
             value={lastName}
@@ -331,13 +328,13 @@ export function UsersAdminPage() {
         <div className="mt-3 flex flex-wrap gap-3">
           {ALL_ROLES.map((role) => (
             <label className="flex items-center gap-2 text-sm" key={role}>
-              <input checked={selectedRoles.includes(role)} onChange={() => toggleRole(role)} type="checkbox" />
+              <input checked={selectedRoles.includes(role)} disabled={!canManageUsers} onChange={() => toggleRole(role)} type="checkbox" />
               {role}
             </label>
           ))}
         </div>
 
-        {needsCustomer && (
+        {needsCustomer && canManageUsers && (
           <div className="relative mt-3 max-w-sm">
             <button
               className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-left text-sm"
@@ -398,7 +395,7 @@ export function UsersAdminPage() {
         {success && <p className="mt-3 text-sm text-green-700">{success}</p>}
         <button
           className="mt-3 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm"
-          disabled={provisioning}
+          disabled={provisioning || !canManageUsers}
           onClick={() => void createUser()}
           type="button"
         >
@@ -408,8 +405,9 @@ export function UsersAdminPage() {
 
       <section className="rounded-md border border-slate-200 bg-white p-4">
         <h2 className="text-sm font-medium">Reset password</h2>
+        {!canManageUsers && <p className="mt-2 text-sm text-slate-500">Only `tiba_admin` can set temporary passwords.</p>}
         {!selectedUser && <p className="mt-2 text-sm text-slate-500">Select a user from search results first.</p>}
-        {selectedUser && (
+        {selectedUser && canManageUsers && (
           <div className="mt-3">
             <p className="text-sm text-slate-700">
               Selected: <span className="font-medium">{userDisplay(selectedUser)}</span> ({selectedUser.email ?? selectedUser.username ?? `User ${shortId(selectedUser.id)}`})

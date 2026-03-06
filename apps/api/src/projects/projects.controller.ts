@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, Req } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { AuthUser } from '../auth/auth-user.interface';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CreateProjectDto } from './dto/create-project.dto';
@@ -7,6 +8,7 @@ import { UpdateProjectDto } from './dto/update-project.dto';
 import { ProjectDto, ProjectListResponseDto } from './projects.types';
 import { ProjectsService } from './projects.service';
 
+@ApiTags('projects')
 @Controller('projects')
 export class ProjectsController {
   constructor(private readonly projectsService: ProjectsService) {}

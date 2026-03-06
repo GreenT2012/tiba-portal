@@ -6,6 +6,7 @@ export default async function TibaUsersPage() {
   const session = await auth();
   const roles = session?.roles ?? [];
   const isTiba = roles.includes('tiba_agent') || roles.includes('tiba_admin');
+  const isAdmin = roles.includes('tiba_admin');
 
   if (!session) {
     redirect('/login');
@@ -15,5 +16,5 @@ export default async function TibaUsersPage() {
     redirect('/tickets');
   }
 
-  return <UsersAdminPage />;
+  return <UsersAdminPage canManageUsers={isAdmin} />;
 }

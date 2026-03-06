@@ -1,4 +1,4 @@
-import { BadGatewayException, BadRequestException } from '@nestjs/common';
+import { BadGatewayException, BadRequestException, Logger } from '@nestjs/common';
 import { ListUsersDto } from './dto/list-users.dto';
 import { UsersService } from './users.service';
 
@@ -29,6 +29,7 @@ describe('UsersService', () => {
       KEYCLOAK_ADMIN_REALM: 'tiba'
     };
     global.fetch = jest.fn();
+    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
   });
 
   afterEach(() => {

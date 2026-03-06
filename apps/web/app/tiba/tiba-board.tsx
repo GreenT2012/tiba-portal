@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { AssigneeOption, assigneeDisplayLabel } from '@/components/users/assignee-select';
+import { readApiError } from '@/lib/api';
 
 type TicketSummary = {
   id: string;
@@ -128,7 +129,7 @@ export function TibaBoard({ currentUserSub }: { currentUserSub: string }) {
     try {
       const response = await fetch(`/api/backend/tickets?${queryForTab(activeTab)}`, { cache: 'no-store' });
       if (!response.ok) {
-        throw new Error(await response.text());
+        throw new Error(await readApiError(response, 'Failed to load tickets'));
       }
 
       const data = (await response.json()) as TicketsResponse;
@@ -217,7 +218,7 @@ export function TibaBoard({ currentUserSub }: { currentUserSub: string }) {
       });
 
       if (!response.ok) {
-        throw new Error(await response.text());
+        throw new Error(await readApiError(response, 'Failed to assign ticket'));
       }
 
       await loadTickets();
@@ -240,7 +241,7 @@ export function TibaBoard({ currentUserSub }: { currentUserSub: string }) {
       });
 
       if (!response.ok) {
-        throw new Error(await response.text());
+        throw new Error(await readApiError(response, 'Failed to update status'));
       }
 
       await loadTickets();

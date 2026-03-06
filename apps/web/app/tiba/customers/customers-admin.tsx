@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { readApiError } from '@/lib/api';
 
 type Customer = {
   id: string;
@@ -12,11 +13,6 @@ type Customer = {
 type CustomersResponse = {
   items: Customer[];
 };
-
-function getErrorMessage(status: number, body: string) {
-  const text = body.trim();
-  return `Request failed (${status}): ${text || 'No response body'}`;
-}
 
 export function CustomersAdminPage() {
   const [query, setQuery] = useState('');
@@ -50,8 +46,7 @@ export function CustomersAdminPage() {
 
       const response = await fetch(`/api/backend/customers?${params.toString()}`, { cache: 'no-store' });
       if (!response.ok) {
-        const body = await response.text();
-        throw new Error(getErrorMessage(response.status, body));
+        throw new Error(await readApiError(response, 'Failed to load customers'));
       }
 
       const data = (await response.json()) as CustomersResponse;
@@ -86,8 +81,7 @@ export function CustomersAdminPage() {
       });
 
       if (!response.ok) {
-        const body = await response.text();
-        throw new Error(getErrorMessage(response.status, body));
+        throw new Error(await readApiError(response, 'Failed to create customer'));
       }
 
       setCreateName('');

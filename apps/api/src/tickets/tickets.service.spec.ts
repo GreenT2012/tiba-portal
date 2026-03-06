@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { AuditService } from '../audit/audit.service';
 import { TicketsService } from './tickets.service';
 
@@ -196,7 +196,7 @@ describe('TicketsService audit logging', () => {
     const service = new TicketsService(prisma as any, new AuditService(prisma as any), storage as any);
 
     await service.updateTicketStatus(
-      { sub: 'u1', roles: ['customer_user'], customerId: 'c1', email: null },
+      { sub: 'a1', roles: ['tiba_agent'], customerId: null, email: null },
       't1',
       { status: 'IN_PROGRESS' }
     );
@@ -209,6 +209,40 @@ describe('TicketsService audit logging', () => {
         })
       })
     );
+  });
+
+  it('forbids customer_user from updating ticket status', async () => {
+    const { prisma } = makePrismaMock();
+    const storage = makeStorageMock();
+    const service = new TicketsService(prisma as any, new AuditService(prisma as any), storage as any);
+
+    await expect(
+      service.updateTicketStatus(
+        { sub: 'u1', roles: ['customer_user'], customerId: 'c1', email: null },
+        't1',
+        { status: 'IN_PROGRESS' }
+      )
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('returns not found for customer_user on cross-tenant ticket detail', async () => {
+    const { prisma } = makePrismaMock();
+    const storage = makeStorageMock();
+    prisma.ticket.findUnique.mockResolvedValue({
+      id: 't1',
+      customer_id: 'c2',
+      comments: [],
+      attachments: []
+    });
+
+    const service = new TicketsService(prisma as any, new AuditService(prisma as any), storage as any);
+
+    await expect(
+      service.getTicketById(
+        { sub: 'u1', roles: ['customer_user'], customerId: 'c1', email: null },
+        't1'
+      )
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('writes assigned audit event on assignTicket', async () => {
@@ -286,6 +320,22 @@ describe('TicketsService audit logging', () => {
     );
   });
 
+  it('returns not found for customer_user adding comment to cross-tenant ticket', async () => {
+    const { prisma } = makePrismaMock();
+    const storage = makeStorageMock();
+    prisma.ticket.findUnique.mockResolvedValue({ id: 't1', customer_id: 'c2' });
+
+    const service = new TicketsService(prisma as any, new AuditService(prisma as any), storage as any);
+
+    await expect(
+      service.addComment(
+        { sub: 'u1', roles: ['customer_user'], customerId: 'c1', email: null },
+        't1',
+        { body: 'hello' }
+      )
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
   it('rejects disallowed mime when presigning upload', async () => {
     const { prisma } = makePrismaMock();
     const storage = makeStorageMock();
@@ -341,5 +391,21 @@ describe('TicketsService audit logging', () => {
         data: expect.objectContaining({ action: 'attachment_added' })
       })
     );
+  });
+
+  it('returns not found for customer_user presign upload on cross-tenant ticket', async () => {
+    const { prisma } = makePrismaMock();
+    const storage = makeStorageMock();
+    prisma.ticket.findUnique.mockResolvedValue({ id: 't1', customer_id: 'c2' });
+
+    const service = new TicketsService(prisma as any, new AuditService(prisma as any), storage as any);
+
+    await expect(
+      service.presignAttachmentUpload(
+        { sub: 'u1', roles: ['customer_user'], customerId: 'c1', email: null },
+        't1',
+        { filename: 'test.pdf', mime: 'application/pdf', sizeBytes: 1024 }
+      )
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 });

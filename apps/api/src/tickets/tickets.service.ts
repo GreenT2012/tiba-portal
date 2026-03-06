@@ -6,8 +6,10 @@ import {
   Optional
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
+import { ticketStatusValues } from '@tiba/shared';
 import { AuditService } from '../audit/audit.service';
 import { AuthUser } from '../auth/auth-user.interface';
+import { assertInternalUser, assertTenantResourceVisible, isCustomerUser, isInternalUser } from '../auth/authz';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { UsersService } from '../users/users.service';
@@ -26,7 +28,6 @@ import {
   TicketListResponseDto
 } from './tickets.types';
 
-const STATUSES = ['OPEN', 'IN_PROGRESS', 'CLOSED'] as const;
 const DEFAULT_MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 
 @Injectable()
@@ -39,13 +40,13 @@ export class TicketsService {
   ) {}
 
   async listTickets(user: AuthUser, query: ListTicketsDto): Promise<TicketListResponseDto> {
-    if (this.isCustomerUser(user) && query.customerId) {
+    if (isCustomerUser(user) && query.customerId) {
       throw new ForbiddenException('customerId is not allowed for customer_user');
     }
 
     const where: any = {};
-    const customerId = this.isCustomerUser(user) ? user.customerId : query.customerId;
-    if (this.isCustomerUser(user) && !customerId) {
+    const customerId = isCustomerUser(user) ? user.customerId : query.customerId;
+    if (isCustomerUser(user) && !customerId) {
       throw new ForbiddenException('customer_id claim is required for customer_user');
     }
     if (customerId) where.customer_id = customerId;
@@ -93,7 +94,7 @@ export class TicketsService {
   async createTicket(user: AuthUser, dto: CreateTicketDto): Promise<TicketDto> {
     const status = dto.status ?? 'OPEN';
 
-    if (!STATUSES.includes(status as (typeof STATUSES)[number])) {
+    if (!ticketStatusValues.includes(status as (typeof ticketStatusValues)[number])) {
       throw new BadRequestException('status must be one of: OPEN, IN_PROGRESS, CLOSED');
     }
 
@@ -103,7 +104,7 @@ export class TicketsService {
       throw new BadRequestException('Project not found');
     }
 
-    if (this.isCustomerUser(user)) {
+    if (isCustomerUser(user)) {
       if (!user.customerId) {
         throw new ForbiddenException('customer_id claim is required for customer_user');
       }
@@ -116,7 +117,7 @@ export class TicketsService {
       if (project.customer_id !== user.customerId) {
         throw new BadRequestException('Project not found for customer');
       }
-    } else if (this.isInternalUser(user)) {
+    } else if (isInternalUser(user)) {
       if (dto.customerId && dto.customerId !== project.customer_id) {
         throw new BadRequestException('customerId does not match project customer');
       }
@@ -177,7 +178,7 @@ export class TicketsService {
       }
     });
 
-    this.assertTicketVisible(user, ticket);
+    assertTenantResourceVisible(user, ticket, 'Ticket');
     const dto = toTicketDto(ticket as any);
 
     if (dto.assigneeUserId && this.usersService) {
@@ -192,12 +193,14 @@ export class TicketsService {
   }
 
   async updateTicketStatus(user: AuthUser, id: string, dto: UpdateTicketStatusDto): Promise<TicketDto> {
-    if (!STATUSES.includes(dto.status as (typeof STATUSES)[number])) {
+    assertInternalUser(user);
+
+    if (!ticketStatusValues.includes(dto.status as (typeof ticketStatusValues)[number])) {
       throw new BadRequestException('status must be one of: OPEN, IN_PROGRESS, CLOSED');
     }
 
     const existing = await this.prisma.ticket.findUnique({ where: { id } });
-    this.assertTicketVisible(user, existing);
+    assertTenantResourceVisible(user, existing, 'Ticket');
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const next = await tx.ticket.update({
@@ -226,12 +229,10 @@ export class TicketsService {
   }
 
   async assignTicket(user: AuthUser, id: string, dto: AssignTicketDto): Promise<TicketDto> {
-    if (!this.isInternalUser(user)) {
-      throw new ForbiddenException('Only tiba_agent/tiba_admin can assign tickets');
-    }
+    assertInternalUser(user);
 
     const existing = await this.prisma.ticket.findUnique({ where: { id } });
-    this.assertTicketVisible(user, existing);
+    assertTenantResourceVisible(user, existing, 'Ticket');
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const next = await tx.ticket.update({
@@ -265,7 +266,7 @@ export class TicketsService {
     }
 
     const ticket = await this.prisma.ticket.findUnique({ where: { id } });
-    this.assertTicketVisible(user, ticket);
+    assertTenantResourceVisible(user, ticket, 'Ticket');
 
     const comment = await this.prisma.$transaction(async (tx) => {
       const created = await tx.ticketComment.create({
@@ -309,7 +310,7 @@ export class TicketsService {
     this.validateAttachmentInput(dto);
 
     const ticket = await this.prisma.ticket.findUnique({ where: { id: ticketId } });
-    this.assertTicketVisible(user, ticket);
+    assertTenantResourceVisible(user, ticket, 'Ticket');
 
     const attachmentId = randomUUID();
     const safeFilename = this.sanitizeFilename(dto.filename);
@@ -371,7 +372,7 @@ export class TicketsService {
     attachmentId: string
   ): Promise<PresignDownloadAttachmentResponseDto> {
     const ticket = await this.prisma.ticket.findUnique({ where: { id: ticketId } });
-    this.assertTicketVisible(user, ticket);
+    assertTenantResourceVisible(user, ticket, 'Ticket');
 
     const attachment = await this.prisma.ticketAttachment.findFirst({
       where: {
@@ -386,27 +387,6 @@ export class TicketsService {
 
     const downloadUrl = await this.storageService.getPresignedDownloadUrl(attachment.object_key);
     return { downloadUrl };
-  }
-
-  private assertTicketVisible<T extends { id: string; customer_id: string }>(
-    user: AuthUser,
-    ticket: T | null
-  ): asserts ticket is T {
-    if (!ticket) {
-      throw new NotFoundException('Ticket not found');
-    }
-
-    if (this.isCustomerUser(user) && ticket.customer_id !== user.customerId) {
-      throw new NotFoundException('Ticket not found');
-    }
-  }
-
-  private isCustomerUser(user: AuthUser) {
-    return user.roles.includes('customer_user');
-  }
-
-  private isInternalUser(user: AuthUser) {
-    return user.roles.includes('tiba_agent') || user.roles.includes('tiba_admin');
   }
 
   private validateAttachmentInput(dto: PresignUploadAttachmentDto) {

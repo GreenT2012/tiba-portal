@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { useEffect, useState } from 'react';
 import { AssigneeOption, assigneeDisplayLabel } from '@/components/users/assignee-select';
+import { readApiError } from '@/lib/api';
 
 type TicketSummary = {
   id: string;
@@ -77,7 +78,7 @@ export default function TicketsPage() {
       try {
         const res = await fetch('/api/backend/tickets?view=open', { cache: 'no-store' });
         if (!res.ok) {
-          throw new Error(await res.text());
+          throw new Error(await readApiError(res, 'Failed to load tickets'));
         }
         const json = (await res.json()) as TicketsResponse;
         setData(json);

@@ -16,7 +16,9 @@
     "incremental": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "@tiba/shared": ["../../packages/shared/src"],
+      "@tiba/shared/*": ["../../packages/shared/src/*"]
     },
     "plugins": [{ "name": "next" }]
   },

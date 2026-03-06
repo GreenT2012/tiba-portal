@@ -7,6 +7,7 @@ import { useSession } from 'next-auth/react';
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { AssigneeSelect } from '@/components/users/assignee-select';
+import { readApiError } from '@/lib/api';
 import { z } from 'zod';
 
 const ticketSchema = z.object({
@@ -130,7 +131,7 @@ export default function NewTicketPage() {
 
         const response = await fetch(`/api/backend/customers?${params.toString()}`, { signal: controller.signal });
         if (!response.ok) {
-          throw new Error('Failed to load customers');
+          throw new Error(await readApiError(response, 'Failed to load customers'));
         }
 
         const data = (await response.json()) as { items?: CustomerOption[] };
@@ -185,7 +186,7 @@ export default function NewTicketPage() {
 
         const response = await fetch(`/api/backend/projects?${params.toString()}`, { signal: controller.signal });
         if (!response.ok) {
-          throw new Error('Failed to load projects');
+          throw new Error(await readApiError(response, 'Failed to load projects'));
         }
 
         const data = (await response.json()) as {
@@ -280,8 +281,7 @@ export default function NewTicketPage() {
         });
 
         if (!createRes.ok) {
-          const message = await createRes.text();
-          throw new Error(message || 'Failed to create ticket');
+          throw new Error(await readApiError(createRes, 'Failed to create ticket'));
         }
 
         const ticket = (await createRes.json()) as { id: string };
@@ -310,8 +310,7 @@ export default function NewTicketPage() {
           });
 
           if (!presignRes.ok) {
-            const message = await presignRes.text();
-            throw new Error(message || 'Failed to presign upload');
+            throw new Error(await readApiError(presignRes, 'Failed to prepare attachment upload'));
           }
 
           const presign = (await presignRes.json()) as {
